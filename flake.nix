@@ -30,46 +30,42 @@
             cargoLock.lockFile = ./research/tree-sitter-bash-analyzer/Cargo.lock;
             meta.mainProgram = "tree-sitter-bash-analyzer";
           };
-          piConfig = pkgs.runCommand "pi-config" { } ''
-            mkdir -p $out/agent/extensions $out/agent/agents $out/agent/prompts
-            ln -s ${./domains/ai/permissions.json} $out/agent/permissions.defaults.json
-            for agent in ${./domains/ai/agents}/*.md; do
-              ln -s "$agent" "$out/agent/agents/$(basename "$agent")"
-              ln -s "$agent" "$out/agent/prompts/$(basename "$agent")"
-            done
-            for extension in ${./domains/ai/pi}/*/; do
-              name=$(basename "$extension")
-              case "$name" in
-                *.patch|*.test.ts|pocket) ;;
-                *) ln -s "$extension" "$out/agent/extensions/$name" ;;
-              esac
-            done
-          '';
-          upstreamPi = pkgs.callPackage ./pkgs/pi { };
-          pi = pkgs.writeShellScriptBin "pi" ''
-            set -euo pipefail
-            base="''${PI_CONFIG_DIR:-$HOME/.pi}"
-            agent="$base/agent"
-            mkdir -p "$agent/extensions"
-            # Remove entries retired from the packaged configuration so an
-            # earlier invocation cannot leave a stale extension active.
-            rm -rf "$agent/extensions/pocket" "$agent/extensions/agentic-20-questions.ts"
-            ln -sfn ${piConfig}/agent/agents "$agent/agents"
-            ln -sfn ${piConfig}/agent/prompts "$agent/prompts"
 
-            # The store artifact is immutable, while Pi must write sessions,
-            # settings, and logs. Keep those mutable state files in the
-            # selected base directory and link only the packaged config.
-            ln -sfn ${piConfig}/agent/permissions.defaults.json "$agent/permissions.defaults.json"
-            for extension in ${piConfig}/agent/extensions/*/; do
-              name="$(basename "$extension")"
-              ln -sfn "$extension" "$agent/extensions/$name"
-            done
+          # This is deliberately a package rather than a Home Manager module.
+          # `pi-setup` is safe to run from a shell, a login profile, or a
+          # launchd/systemd user service and keeps the mutable ~/.pi tree small:
+          # all project-owned files remain in the Nix store.
+          piConfig = pkgs.writeShellApplication {
+            name = "pi-setup";
+            runtimeInputs = [ pkgs.coreutils ];
+            text = ''
+               set -euo pipefail
+              # Override this for isolated profiles, tests, or another Pi
+              # installation. The default preserves Pi's normal location.
+              base="''${PI_CONFIG_DIR:-$HOME/.pi}"
+              agent="$base/agent"
+               mkdir -p "$agent/extensions" "$agent/bin"
 
-            export PI_CODING_AGENT_DIR="$agent"
-            exec ${upstreamPi}/bin/pi "$@"
-          '';
+               link() {
+                 target="$1"
+                 source="$2"
+                 rm -rf "$target"
+                 ln -s "$source" "$target"
+               }
 
+               link "$agent/permissions.defaults.json" ${./domains/ai/permissions.json}
+               # Pi discovers extensions as children of ~/.pi/agent/extensions.
+               for extension in ${./domains/ai/pi}/*; do
+                 name="$(basename "$extension")"
+                 case "$name" in
+                   *.patch|*.test.ts) ;;
+                   *) link "$agent/extensions/$name" "$extension" ;;
+                 esac
+               done
+
+               printf 'Pi configuration linked under %s\\n' "$agent"
+            '';
+          };
         in
         {
           pi = pkgs.callPackage ./pkgs/pi { };
