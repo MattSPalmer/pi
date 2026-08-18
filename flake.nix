@@ -26,7 +26,6 @@
         modules = [
           ./nix/modules/pi.nix
           ./nix/modules/analyzer.nix
-          ./nix/modules/dev-shell.nix
           ./nix/modules/permission-gate.nix
           ./nix/modules/pi-extensions.nix
           ./nix/modules/committing-mode.nix

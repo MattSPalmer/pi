@@ -30,5 +30,11 @@ let
       '';
 in
 {
+  devShells.default = pkgs.mkShell {
+    packages = [
+      pkgs.bun
+      pkgs.jq
+    ];
+  };
   checks.piExtensions = check;
 }
