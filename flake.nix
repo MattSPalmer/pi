@@ -21,16 +21,20 @@
         };
         moduleArgs = {
           inherit pkgs;
-          packages = packagesModule;
+          packages = result.packages;
         };
-        packagesModule = import ./nix/modules/packages.nix moduleArgs;
-        devShellsModule = import ./nix/modules/dev-shells.nix moduleArgs;
-        checksModule = import ./nix/modules/checks.nix moduleArgs;
+        modules = [
+          ./nix/modules/pi.nix
+          ./nix/modules/analyzer.nix
+          ./nix/modules/dev-shell.nix
+          ./nix/modules/checks.nix
+        ];
+        result = builtins.foldl' (acc: module: nixpkgs.lib.recursiveUpdate acc (import module moduleArgs)) {
+          packages = { };
+          devShells = { };
+          checks = { };
+        } modules;
       in
-      {
-        packages = packagesModule;
-        devShells = devShellsModule;
-        checks = checksModule;
-      }
+      result
     );
 }

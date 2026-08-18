@@ -65,6 +65,7 @@ let
       '';
 in
 {
-  tree-sitter-bash-analyzer = analyzer;
-  inherit permissionGate piExtensions committingMode;
+  checks = {
+    inherit permissionGate piExtensions committingMode;
+  };
 }
