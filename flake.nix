@@ -50,7 +50,7 @@
           upstreamPi = pkgs.callPackage ./pkgs/pi { };
           pi = pkgs.writeShellScriptBin "pi" ''
             set -euo pipefail
-            base="''${PI_CONFIG_DIR:-$HOME/.pi}"
+            base="''${PI_CONFIG_DIR:?PI_CONFIG_DIR must be set}"
             agent="$base/agent"
             mkdir -p "$agent/extensions"
             # Remove entries retired from the packaged configuration so an
