@@ -43,7 +43,11 @@ nix flake update
 
 ## Configuration
 
-The wrapper uses the immutable packaged Pi configuration from `PI_CONFIG_DIR`, which defaults to its `/nix/store` path. It overlays that configuration into the writable user directory `~/.pi/agent`; sessions, settings, and logs therefore remain outside the Nix store.
+The wrapper uses the immutable packaged Pi configuration from `PI_CONFIG_DIR`, which defaults to its `/nix/store` path. It overlays that configuration into the writable user directory `~/.pi/agent`; sessions, settings, and logs therefore remain outside the Nix store. Override the writable agent directory with `PI_AGENT_DIR` when needed:
+
+```sh
+PI_AGENT_DIR="$PWD/.pi/agent" nix run
+```
 
 To use another immutable configuration source:
 

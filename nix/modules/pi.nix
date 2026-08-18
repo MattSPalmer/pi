@@ -59,7 +59,7 @@ let
       # user's home remains the writable overlay for sessions, settings, and
       # other Pi state.
       config="$PI_CONFIG_DIR"
-      agent="''${HOME}/.pi/agent"
+      agent="''${PI_AGENT_DIR:-$HOME/.pi/agent}"
       mkdir -p "$agent/extensions"
       ln -sfn "$config/agents" "$agent/agents"
       ln -sfn "$config/prompts" "$agent/prompts"
