@@ -157,7 +157,7 @@ These restrictions are expressed both in the agent definitions and in the permis
 
 ## Project-local permissions
 
-A project can add `.pi/permissions.json` without changing the profile-wide configuration. It may contain direct command rules, path allows and denies, or categorized Jujutsu rules:
+A project can add `.pi/permissions.json` without changing the profile-wide configuration. It may contain direct command rules, path allows and denies, or categorized rules. `READ` allows by default; `WRITE`, `NETWORK`, and `ADMIN` require approval; `DENY` is a hard block. The categories work for Bash commands, paths, and Jujutsu commands. Direct Bash rules and the legacy `paths.allow`/`paths.deny` keys remain supported:
 
 ```json
 {
@@ -165,8 +165,17 @@ A project can add `.pi/permissions.json` without changing the profile-wide confi
     "rg *": "allow"
   },
   "paths": {
-    "allow": ["./src/**"],
-    "deny": ["~/.ssh/**"]
+    "READ": ["./src/**"],
+    "WRITE": ["./generated/**"],
+    "ADMIN": ["~/.ssh/**"]
+  },
+  "bash": {
+    "READ": ["rg *", "ls *"],
+    "NETWORK": ["curl *"]
+  },
+  "jj": {
+    "READ": ["status", "diff"],
+    "WRITE": ["commit"]
   }
 }
 ```

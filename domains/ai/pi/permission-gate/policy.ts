@@ -4,6 +4,25 @@ import { existsSync, readFileSync } from "node:fs";
 export type Action = "allow" | "ask" | "deny";
 export type Rule = { glob: string; action: Action; context?: string; source: string; tier: number; specificity: number };
 const escapeRegex = (value: string) => value.replace(/[|\\{}()[\]^$+*?.-]/g, "\\$&");
+const categories = ["DENY", "READ", "WRITE", "NETWORK", "ADMIN"] as const;
+const categoryAction = (category: (typeof categories)[number]): Action =>
+  category === "DENY" ? "deny" : category === "READ" ? "allow" : "ask";
+const addCategorizedRules = (
+  target: Record<string, { action: Action; context?: string }>,
+  section: any,
+  prefix: string,
+  jj: boolean,
+) => {
+  if (!section || typeof section !== "object") return;
+  for (const category of categories) {
+    for (const item of section[category] ?? []) {
+      const value = typeof item === "string" ? item : item?.command ?? item?.externalShell ?? item?.path;
+      if (typeof value !== "string") continue;
+      const suffix = jj && !item?.externalShell ? `${value}*` : value;
+      target[`${prefix}${suffix}`] = { action: categoryAction(category) };
+    }
+  }
+};
 // Project policy is intentionally loaded at runtime: the same
 // profile-managed extension can then be used from any repository.
 // Policies live in .pi/permissions.json. Starting in a subdirectory
@@ -62,30 +81,11 @@ export const projectRules = (cwd: string, axis: "bash" | "paths", home: string) 
             }
           }
         }
-        // Make project permissions files use the same convenient
-        // jj categories as the profile permissions.json.
-        for (const category of [
-          "DENY",
-          "READ",
-          "WRITE",
-          "NETWORK",
-          "ADMIN",
-        ] as const) {
-          const action: Action =
-            category === "DENY"
-              ? "deny"
-              : category === "READ"
-                ? "allow"
-                : "ask";
-          for (const item of policy.jj?.[category] ?? []) {
-            const glob =
-              typeof item === "string"
-                ? `jj ${item}*`
-                : `${item.externalShell}*`;
-            if (typeof glob === "string") sourceRules[glob] = { action };
-          }
-        }
+        addCategorizedRules(sourceRules, policy.bash, "", false);
+        // Jujutsu categories are also accepted in project policies.
+        addCategorizedRules(sourceRules, policy.jj, "jj ", true);
       } else {
+        addCategorizedRules(sourceRules, policy.paths, "", false);
         for (const path of policy.paths?.allow ?? [])
           sourceRules[path] = { action: "allow" };
         for (const path of policy.paths?.deny ?? [])
