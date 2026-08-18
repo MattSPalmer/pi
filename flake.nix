@@ -33,8 +33,12 @@
           # Keep the project-owned Pi configuration in the Nix store so the
           # wrapped executable is self-contained and reproducible.
           piConfig = pkgs.runCommand "pi-config" { } ''
-            mkdir -p "$out/agent/extensions"
+            mkdir -p "$out/agent/extensions" "$out/agent/agents" "$out/agent/prompts"
             ln -s ${./domains/ai/permissions.json} "$out/agent/permissions.defaults.json"
+            for agent in ${./domains/ai/agents}/*.md; do
+              ln -s "$agent" "$out/agent/agents/$(basename "$agent")"
+              ln -s "$agent" "$out/agent/prompts/$(basename "$agent")"
+            done
             for extension in ${./domains/ai/pi}/*/; do
               name=$(basename "$extension")
               case "$name" in
@@ -52,6 +56,8 @@
             # Remove entries retired from the packaged configuration so an
             # earlier invocation cannot leave a stale extension active.
             rm -rf "$agent/extensions/pocket" "$agent/extensions/agentic-20-questions.ts"
+            ln -sfn ${piConfig}/agent/agents "$agent/agents"
+            ln -sfn ${piConfig}/agent/prompts "$agent/prompts"
 
             # The store artifact is immutable, while Pi must write sessions,
             # settings, and logs. Keep those mutable state files in the
