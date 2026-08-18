@@ -35,14 +35,7 @@ let
 in
 {
   packages = {
-    inherit piConfig pi;
-    default = pkgs.symlinkJoin {
-      name = "pi-harness";
-      paths = [
-        pi
-        piConfig
-      ];
-      meta.mainProgram = "pi";
-    };
+    inherit pi;
+    default = pi;
   };
 }
