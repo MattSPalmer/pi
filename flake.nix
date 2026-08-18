@@ -35,7 +35,7 @@
           piConfig = pkgs.runCommand "pi-config" { } ''
             mkdir -p "$out/agent/extensions"
             ln -s ${./domains/ai/permissions.json} "$out/agent/permissions.defaults.json"
-            for extension in ${./domains/ai/pi}/*; do
+            for extension in ${./domains/ai/pi}/*/; do
               name=$(basename "$extension")
               case "$name" in
                 *.patch|*.test.ts) ;;
@@ -49,12 +49,15 @@
             base="''${PI_CONFIG_DIR:-$HOME/.pi}"
             agent="$base/agent"
             mkdir -p "$agent/extensions"
+            # Remove entries retired from the packaged configuration so an
+            # earlier invocation cannot leave a stale extension active.
+            rm -rf "$agent/extensions/pocket" "$agent/extensions/agentic-20-questions.ts"
 
             # The store artifact is immutable, while Pi must write sessions,
             # settings, and logs. Keep those mutable state files in the
             # selected base directory and link only the packaged config.
             ln -sfn ${piConfig}/agent/permissions.defaults.json "$agent/permissions.defaults.json"
-            for extension in ${piConfig}/agent/extensions/*; do
+            for extension in ${piConfig}/agent/extensions/*/; do
               name="$(basename "$extension")"
               ln -sfn "$extension" "$agent/extensions/$name"
             done
