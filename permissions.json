@@ -24,40 +24,6 @@
       "gh api * -i *",
       "gh api * -i*"
     ],
-    "ALT": [
-      {
-        "command": "git",
-        "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
-      },
-      {
-        "command": "git *",
-        "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
-      },
-      {
-        "command": "*/git",
-        "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
-      },
-      {
-        "command": "*/git *",
-        "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
-      },
-      {
-        "command": "find",
-        "context": "find use is precluded entirely by fd (`fd --help` if you're unfamiliar)."
-      },
-      {
-        "command": "find *",
-        "context": "find use is precluded entirely by fd (`fd --help` if you're unfamiliar)."
-      },
-      {
-        "command": "grep",
-        "context": "grep use is precluded entirely by rg (`rg --help` if you're unfamiliar)."
-      },
-      {
-        "command": "grep *",
-        "context": "grep use is precluded entirely by rg (`rg --help` if you're unfamiliar)."
-      }
-    ],
     "READ": [
       "pwd",
       "rg",

@@ -1,12 +1,36 @@
-{ pkgs, packages, ... }:
+{
+  pkgs,
+  packages,
+  altPreferences,
+  ...
+}:
 let
+  basePermissions = builtins.fromJSON (builtins.readFile ../../permissions.json);
+  altRules = builtins.concatLists (
+    pkgs.lib.mapAttrsToList (
+      _: alt:
+      map (command: {
+        inherit command;
+        context = alt.context;
+      }) alt.commands
+    ) altPreferences
+  );
+  permissions = basePermissions // {
+    bash = basePermissions.bash // {
+      ALT = altRules;
+    };
+  };
+  permissionsFile = pkgs.writeText "permissions.defaults.json" (builtins.toJSON permissions);
+  altPackages = pkgs.lib.concatLists (
+    pkgs.lib.mapAttrsToList (_: alt: alt.packages or [ ]) altPreferences
+  );
   piConfig = pkgs.stdenv.mkDerivation {
     pname = "pi-config";
     version = "1";
     dontUnpack = true;
     installPhase = ''
       mkdir -p "$out/agent/extensions" "$out/agent/agents" "$out/agent/prompts"
-      ln -s ${../../permissions.json} "$out/agent/permissions.defaults.json"
+      ln -s ${permissionsFile} "$out/agent/permissions.defaults.json"
       for agent in ${../../agents}/*.md; do
         ln -s "$agent" "$out/agent/agents/$(basename "$agent")"
         ln -s "$agent" "$out/agent/prompts/$(basename "$agent")"
@@ -27,7 +51,8 @@ let
       pkgs.coreutils
       upstreamPi
       packages.tree-sitter-bash-analyzer
-    ];
+    ]
+    ++ altPackages;
     runtimeEnv.PI_CONFIG_SOURCE = "${piConfig}/agent";
     text = ''
       base="''${PI_CONFIG_DIR:?PI_CONFIG_DIR must be set}"
@@ -50,4 +75,5 @@ in
     inherit pi;
     default = pi;
   };
+  devShellPackages = altPackages;
 }

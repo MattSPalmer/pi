@@ -19,8 +19,17 @@
           inherit system;
           config.allowUnfree = true;
         };
+        mkAlt = commands: replacement: packages: {
+          inherit commands packages;
+          context = "${builtins.head commands} use is precluded entirely by ${replacement} (`${replacement} --help` if you're unfamiliar).";
+        };
+        altPreferences = {
+          git = mkAlt [ "git" "git *" "*/git" "*/git *" ] "jj" [ pkgs.jujutsu ];
+          find = mkAlt [ "find" "find *" ] "fd" [ pkgs.fd ];
+          grep = mkAlt [ "grep" "grep *" ] "rg" [ pkgs.ripgrep ];
+        };
         moduleArgs = {
-          inherit pkgs;
+          inherit pkgs altPreferences;
           packages = result.packages;
         };
         moduleOptions = import ./nix/options.nix { inherit (nixpkgs) lib; };
