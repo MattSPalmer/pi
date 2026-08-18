@@ -45,7 +45,7 @@ let
     '';
   };
   upstreamPi = pkgs.callPackage ../../pkgs/pi { };
-  pi = pkgs.writeShellApplication {
+  piWrapper = pkgs.writeShellApplication {
     name = "pi";
     runtimeInputs = [
       pkgs.coreutils
@@ -68,6 +68,15 @@ let
       export PI_CODING_AGENT_DIR="$agent"
       exec pi "$@"
     '';
+  };
+  # Keep the generated configuration alongside the executable in the build
+  # result, rather than only referring to it through the store path at runtime.
+  pi = pkgs.symlinkJoin {
+    name = "pi";
+    paths = [
+      piWrapper
+      piConfig
+    ];
   };
 in
 {
