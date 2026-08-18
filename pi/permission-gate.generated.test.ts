@@ -1,6 +1,6 @@
 /**
  * Behavioral tests that load and execute the *actual generated* permission-gate
- * extension (as produced by domains/ai/default.nix), rather than a
+ * extension (as produced by default.nix), rather than a
  * reimplemented mock. `permission-gate.test.ts` covers the intended state
  * machine at a conceptual level; this file exists to catch regressions in the
  * generated TypeScript itself (escaping bugs, inverted conditionals, edge

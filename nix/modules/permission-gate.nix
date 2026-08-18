@@ -8,7 +8,7 @@ let
           pkgs.bun
           analyzer
         ];
-        permissionDefaults = builtins.readFile ../../domains/ai/permissions.json;
+        permissionDefaults = builtins.readFile ../../permissions.json;
         passAsFile = [ "permissionDefaults" ];
       }
       ''
@@ -19,11 +19,11 @@ let
         bundle="$TMPDIR/permission-gate.js"
         source="$TMPDIR/permission-gate"
         mkdir -p "$source"
-        cp -R ${../../domains/ai/pi/permission-gate}/. "$source/"
+        cp -R ${../../pi/permission-gate}/. "$source/"
         chmod -R u+w "$source"
         bun build "$source/index.ts" --bundle --format=esm --target=bun --external='@earendil-works/pi-coding-agent' --outfile "$bundle"
-        HOME="$home" GATE_SOURCE_PATH="$bundle" bun test ${../../domains/ai/pi/permission-gate.test.ts}
-        HOME="$home" GATE_SOURCE_PATH="$bundle" bun test ${../../domains/ai/pi/permission-gate.generated.test.ts}
+        HOME="$home" GATE_SOURCE_PATH="$bundle" bun test ${../../pi/permission-gate.test.ts}
+        HOME="$home" GATE_SOURCE_PATH="$bundle" bun test ${../../pi/permission-gate.generated.test.ts}
         touch "$out"
       '';
 in

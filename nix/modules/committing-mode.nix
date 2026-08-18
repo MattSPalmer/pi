@@ -4,7 +4,7 @@ let
     pkgs.runCommand "committing-mode-test"
       {
         nativeBuildInputs = [ pkgs.bun ];
-        source = ../../domains/ai/pi/committing-mode/index.ts;
+        source = ../../pi/committing-mode/index.ts;
       }
       ''
         bun --check "$source"

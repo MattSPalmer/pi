@@ -52,7 +52,7 @@ behavior is stable.
 
 ## Policy compatibility
 
-The Rust program must not duplicate `domains/ai/permissions.nix`. The TypeScript adapter should consume `argv` directly, while retaining current rule precedence and path canonicalization. During migration, the existing tokenizer should remain available as a fallback if the helper is missing or returns malformed JSON.
+The Rust program must not duplicate `permissions.nix`. The TypeScript adapter should consume `argv` directly, while retaining current rule precedence and path canonicalization. During migration, the existing tokenizer should remain available as a fallback if the helper is missing or returns malformed JSON.
 
 ## Security invariants
 

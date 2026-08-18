@@ -8,7 +8,7 @@ let
           pkgs.bun
           analyzer
         ];
-        permissionDefaults = builtins.readFile ../../domains/ai/permissions.json;
+        permissionDefaults = builtins.readFile ../../permissions.json;
         passAsFile = [ "permissionDefaults" ];
       }
       ''
@@ -19,7 +19,7 @@ let
         export HOME="$home"
         export PI_PERMISSION_ANALYZER="${analyzer}/bin/tree-sitter-bash-analyzer"
         work="$TMPDIR/pi-source"
-        cp -R ${../../domains/ai/pi} "$work"
+        cp -R ${../../pi} "$work"
         chmod -R u+w "$work"
         find "$work" -path '*/node_modules' -prune -o -name '*.test.ts' ! -name 'permission-gate.generated.test.ts' ! -name 'permissions.test.ts' -print0 | xargs -0 -n1 bun test
         bundle="$TMPDIR/permission-gate.js"

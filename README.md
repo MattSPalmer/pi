@@ -58,11 +58,14 @@ Packaged agents are available as both Pi agents and prompts. Project extensions 
 - `flake.nix` — flake inputs and system output composition
 - `nix/modules/` — output-contributing modules for Pi, the analyzer, the development shell, and checks
 - `pkgs/pi/` — pinned, offline Nix build of the upstream Pi coding agent
-- `domains/ai/agents/` — project agents and prompts
-- `domains/ai/pi/` — project Pi extensions and their tests
-- `domains/ai/permissions.json` — default permission policy
+- `agents/` — project agents and prompts
+- `pi/` — project Pi extensions and their tests
+- `permissions.json` — default permission policy
+- `llm/` — session database and LLM integration tools
 - `research/tree-sitter-bash-analyzer/` — Rust-based shell command analyzer
 - `docs/` — design notes and configuration documentation
+
+The top-level `agents/`, `pi/`, `llm/`, and `permissions.json` paths are the contents of the packaged end-to-end Pi configuration; they are intentionally not nested under a broader domain hierarchy.
 
 ## Development
 

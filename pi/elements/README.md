@@ -1,7 +1,7 @@
 # Ephemeral UI elements (pi extension)
 
-Installed to `~/.pi/agent/extensions/elements/` by `domains/ai/default.nix`.
-Source of truth: `domains/ai/pi/elements/`.
+Installed to `~/.pi/agent/extensions/elements/` by the flake.
+Source of truth: `pi/elements/`.
 
 ## What it does
 

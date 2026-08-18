@@ -6,12 +6,12 @@ let
     dontUnpack = true;
     installPhase = ''
       mkdir -p "$out/agent/extensions" "$out/agent/agents" "$out/agent/prompts"
-      ln -s ${../../domains/ai/permissions.json} "$out/agent/permissions.defaults.json"
-      for agent in ${../../domains/ai/agents}/*.md; do
+      ln -s ${../../permissions.json} "$out/agent/permissions.defaults.json"
+      for agent in ${../../agents}/*.md; do
         ln -s "$agent" "$out/agent/agents/$(basename "$agent")"
         ln -s "$agent" "$out/agent/prompts/$(basename "$agent")"
       done
-      for extension in ${../../domains/ai/pi}/*/; do
+      for extension in ${../../pi}/*/; do
         name=$(basename "$extension")
         case "$name" in
           *.patch|*.test.ts) ;;
