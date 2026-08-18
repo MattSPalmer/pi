@@ -49,7 +49,7 @@ nix flake update
 
 ## Configuration
 
-The wrapper uses the immutable packaged Pi configuration from `PI_CONFIG_DIR`, which defaults to its `/nix/store` path. It overlays that configuration into the writable user directory `~/.pi/agent`; sessions, settings, and logs therefore remain outside the Nix store. Override the writable agent directory with `PI_AGENT_DIR` when needed:
+The wrapper uses the immutable packaged Pi configuration from `PI_CONFIG_DIR`, which defaults to its `/nix/store` path. Packaged extensions and prompts are loaded directly from that path with `--extension` and `--prompt-template`; nothing is copied or linked into the user's Pi directory. That directory holds writable state only — credentials, settings, and sessions — and defaults to `~/.pi/agent`. Override it with `PI_AGENT_DIR` when needed:
 
 ```sh
 PI_AGENT_DIR="$PWD/.pi/agent" nix run .
@@ -61,7 +61,7 @@ To use another immutable configuration source:
 PI_CONFIG_DIR=/path/to/config nix run .
 ```
 
-Packaged agents are available as both Pi agents and prompts. Project extensions and the default permission policy are linked into the writable overlay, while their contents remain immutable in the package.
+Packaged agents are available as both Pi agents and prompts. The permission gate reads its default policy, and committing mode reads the change-describer agent, from `PI_CONFIG_DIR`; the subagent extension discovers packaged agent definitions there as well. Each falls back to the writable agent directory when `PI_CONFIG_DIR` is unset.
 
 ## Repository layout
 

@@ -286,7 +286,10 @@ export default function (pi: ExtensionAPI) {
       const diff = after.diff;
       let describerPrompt: string;
     try {
-      describerPrompt = readFileSync(join(process.env.HOME ?? "", ".pi", "agent", "agents", "jj-change-describer.md"), "utf8");
+      const agentsDir = process.env.PI_CONFIG_DIR
+        ? join(process.env.PI_CONFIG_DIR, "agents")
+        : join(process.env.HOME ?? "", ".pi", "agent", "agents");
+      describerPrompt = readFileSync(join(agentsDir, "jj-change-describer.md"), "utf8");
       } catch (error) {
         notify(ctx, `Committing mode could not load the jj change describer prompt: ${String(error)}`, "error");
         continue;

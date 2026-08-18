@@ -38,12 +38,12 @@ const addCategorizedRules = (
 // file. The generated profile policy remains the lowest tier.
 export const projectPolicyFiles = (cwd: string, home: string): string[] => {
   const files: string[] = [];
-  const globalDefaults = join(
-    home,
-    ".pi",
-    "agent",
-    "permissions.defaults.json",
-  );
+  // The packaged policy ships with the immutable configuration; fall back to
+  // the writable agent directory for unpackaged installations.
+  const configDir = process.env.PI_CONFIG_DIR;
+  const globalDefaults = configDir
+    ? join(configDir, "permissions.defaults.json")
+    : join(home, ".pi", "agent", "permissions.defaults.json");
   const globalOverrides = join(home, ".pi", "agent", "permissions.json");
   if (existsSync(globalDefaults)) files.push(globalDefaults);
   if (existsSync(globalOverrides)) files.push(globalOverrides);

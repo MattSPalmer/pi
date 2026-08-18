@@ -42,9 +42,23 @@ let
           *) ln -s "$extension" "$out/agent/extensions/$name" ;;
         esac
       done
+      ln -s ${subagentExtension} "$out/agent/extensions/subagent"
     '';
   };
   upstreamPi = pkgs.callPackage ../../pkgs/pi { };
+  # The upstream subagent example is the basis for delegated agents. Patch it
+  # so `tools: none` disables tools, subagents are identifiable at runtime, and
+  # agent definitions are read from the packaged configuration rather than from
+  # the writable user directory.
+  subagentExtension = pkgs.runCommand "pi-subagent-extension" { } ''
+    mkdir -p $out
+    cp ${upstreamPi}/bin/examples/extensions/subagent/{index.ts,agents.ts} $out/
+    chmod +w $out/index.ts $out/agents.ts
+    patch -p1 -d $out < ${../../pi/subagent.patch}
+    substituteInPlace $out/agents.ts \
+      --replace-fail 'const userDir = path.join(getAgentDir(), "agents");' \
+      'const userDir = process.env.PI_CONFIG_DIR ? path.join(process.env.PI_CONFIG_DIR, "agents") : path.join(getAgentDir(), "agents");'
+  '';
   piWrapper = pkgs.writeShellApplication {
     name = "pi";
     runtimeInputs = [
@@ -55,21 +69,23 @@ let
     ++ altPackages;
     runtimeEnv.PI_CONFIG_DIR = "${piConfig}/agent";
     text = ''
-      # PI_CONFIG_DIR identifies the immutable packaged configuration.  The
-      # user's home remains the writable overlay for sessions, settings, and
-      # other Pi state.
+      # PI_CONFIG_DIR identifies the immutable packaged configuration, which is
+      # loaded straight from the store. Nothing is copied or linked into the
+      # user's directory; that directory holds writable Pi state only
+      # (credentials, settings, sessions).
       config="$PI_CONFIG_DIR"
-      agent="''${PI_AGENT_DIR:-$HOME/.pi/agent}"
-      mkdir -p "$agent/extensions"
-      ln -sfn "$config/agents" "$agent/agents"
-      ln -sfn "$config/prompts" "$agent/prompts"
-      ln -sfn "$config/permissions.defaults.json" "$agent/permissions.defaults.json"
+      resources=()
       for extension in "$config/extensions"/*/; do
-        name="$(basename "$extension")"
-        ln -sfn "$extension" "$agent/extensions/$name"
+        [ -e "$extension/index.ts" ] || [ -e "$extension/index.js" ] || continue
+        resources+=(--extension "$extension")
       done
-      export PI_CODING_AGENT_DIR="$agent"
-      exec pi "$@"
+      if [ -d "$config/prompts" ]; then
+        resources+=(--prompt-template "$config/prompts")
+      fi
+      if [ -n "''${PI_AGENT_DIR:-}" ]; then
+        export PI_CODING_AGENT_DIR="$PI_AGENT_DIR"
+      fi
+      exec pi "''${resources[@]}" "$@"
     '';
   };
   # Keep the generated configuration alongside the executable in the build
