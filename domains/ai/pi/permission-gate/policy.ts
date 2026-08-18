@@ -4,9 +4,9 @@ import { existsSync, readFileSync } from "node:fs";
 export type Action = "allow" | "ask" | "deny";
 export type Rule = { glob: string; action: Action; context?: string; source: string; tier: number; specificity: number };
 const escapeRegex = (value: string) => value.replace(/[|\\{}()[\]^$+*?.-]/g, "\\$&");
-const categories = ["DENY", "READ", "WRITE", "NETWORK", "ADMIN"] as const;
+const categories = ["DENY", "ALT", "READ", "WRITE", "NETWORK", "ADMIN"] as const;
 const categoryAction = (category: (typeof categories)[number]): Action =>
-  category === "DENY" ? "deny" : category === "READ" ? "allow" : "ask";
+  category === "DENY" || category === "ALT" ? "deny" : category === "READ" ? "allow" : "ask";
 const addCategorizedRules = (
   target: Record<string, { action: Action; context?: string }>,
   section: any,

@@ -157,7 +157,7 @@ These restrictions are expressed both in the agent definitions and in the permis
 
 ## Project-local permissions
 
-A project can add `.pi/permissions.json` without changing the profile-wide configuration. It may contain direct command rules, path allows and denies, or categorized rules. `READ` allows by default; `WRITE`, `NETWORK`, and `ADMIN` require approval; `DENY` is a hard block. The categories work for Bash commands, paths, and Jujutsu commands. Direct Bash rules and the legacy `paths.allow`/`paths.deny` keys remain supported:
+A project can add `.pi/permissions.json` without changing the profile-wide configuration. It may contain direct command rules, path allows and denies, or categorized rules. `READ` allows by default; `WRITE`, `NETWORK`, and `ADMIN` require approval; `DENY` is a hard block; and `ALT` is a hard block used when a safer replacement command is prescribed (for example, `fd` instead of `find` or `rg` instead of `grep`). The categories work for Bash commands, paths, and Jujutsu commands. Direct Bash rules and the legacy `paths.allow`/`paths.deny` keys remain supported:
 
 ```json
 {
