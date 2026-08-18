@@ -58,6 +58,7 @@
               pi
               piConfig
             ];
+            meta.mainProgram = "pi";
           };
         }
       );
