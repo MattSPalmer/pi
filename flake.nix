@@ -23,6 +23,7 @@
           inherit pkgs;
           packages = result.packages;
         };
+        moduleOptions = import ./nix/options.nix { inherit (nixpkgs) lib; };
         modules = [
           ./nix/modules/pi.nix
           ./nix/modules/analyzer.nix
@@ -41,7 +42,16 @@
                 nixpkgs.lib.removeAttrs contribution [ "devShellPackages" ]
               )
               // {
-                devShellPackages = acc.devShellPackages ++ (contribution.devShellPackages or [ ]);
+                devShellPackages = moduleOptions.options.devShellPackages.type.merge "devShellPackages" [
+                  {
+                    file = "acc";
+                    value = acc.devShellPackages;
+                  }
+                  {
+                    file = "${toString module}";
+                    value = contribution.devShellPackages or [ ];
+                  }
+                ];
               }
             )
             {
