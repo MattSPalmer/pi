@@ -19,7 +19,14 @@ const addCategorizedRules = (
       const value = typeof item === "string" ? item : item?.command ?? item?.externalShell ?? item?.path;
       if (typeof value !== "string") continue;
       const suffix = jj && !item?.externalShell ? `${value}*` : value;
-      target[`${prefix}${suffix}`] = { action: categoryAction(category) };
+      target[`${prefix}${suffix}`] = {
+        action: categoryAction(category),
+        // ALT entries carry the safer replacement in `context`; preserve it
+        // so the gate can explain why the command was blocked.
+        context: typeof item === "object" && item !== null && typeof item.context === "string"
+          ? item.context
+          : undefined,
+      };
     }
   }
 };
