@@ -12,5 +12,6 @@ let
       '';
 in
 {
+  devShellPackages = [ pkgs.bun ];
   checks.committingMode = check;
 }

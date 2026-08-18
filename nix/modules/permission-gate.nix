@@ -28,5 +28,6 @@ let
       '';
 in
 {
+  devShellPackages = [ pkgs.bun ];
   checks.permissionGate = check;
 }

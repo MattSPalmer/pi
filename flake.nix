@@ -30,12 +30,32 @@
           ./nix/modules/pi-extensions.nix
           ./nix/modules/committing-mode.nix
         ];
-        result = builtins.foldl' (acc: module: nixpkgs.lib.recursiveUpdate acc (import module moduleArgs)) {
-          packages = { };
-          devShells = { };
-          checks = { };
-        } modules;
+        result =
+          builtins.foldl'
+            (
+              acc: module:
+              let
+                contribution = import module moduleArgs;
+              in
+              nixpkgs.lib.recursiveUpdate (nixpkgs.lib.removeAttrs acc [ "devShellPackages" ]) (
+                nixpkgs.lib.removeAttrs contribution [ "devShellPackages" ]
+              )
+              // {
+                devShellPackages = acc.devShellPackages ++ (contribution.devShellPackages or [ ]);
+              }
+            )
+            {
+              packages = { };
+              checks = { };
+              devShellPackages = [ ];
+            }
+            modules;
       in
-      result
+      (nixpkgs.lib.removeAttrs result [ "devShellPackages" ])
+      // {
+        devShells.default = pkgs.mkShell {
+          packages = nixpkgs.lib.unique result.devShellPackages;
+        };
+      }
     );
 }
