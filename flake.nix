@@ -27,7 +27,9 @@
           ./nix/modules/pi.nix
           ./nix/modules/analyzer.nix
           ./nix/modules/dev-shell.nix
-          ./nix/modules/checks.nix
+          ./nix/modules/permission-gate.nix
+          ./nix/modules/pi-extensions.nix
+          ./nix/modules/committing-mode.nix
         ];
         result = builtins.foldl' (acc: module: nixpkgs.lib.recursiveUpdate acc (import module moduleArgs)) {
           packages = { };
