@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 type JjResult = {
   code: number;
@@ -109,20 +109,31 @@ const workingCopy = async (cwd: string): Promise<WorkingCopy | null> => {
 export const parseConsumers = (stdout: string, cwd: string): string[] =>
   stdout.split("\n").map((p) => p.trim()).filter(Boolean).map((p) => isAbsolute(p) ? p : resolve(cwd, p));
 
-const consumers = async (cwd: string): Promise<string[]> => {
-  // `polyrepo-consumer` is available globally, so its presence is not proof
-  // that the current directory is a polyrepo root.  In an ordinary jj repo,
-  // asking it for its generated project list can return paths belonging to a
-  // different workspace (or paths that do not exist), which makes committing
-  // mode watch the wrong working copy.  A polyrepo root deliberately is not a
-  // jj repository; use that distinction before attempting discovery.
-  const repository = await run(["root"], cwd);
-  if (repository.code === 0) return [cwd];
+type ConsumerLister = (cwd: string) => Promise<JjResult>;
+type WorkspaceRootCheck = (path: string) => Promise<boolean>;
 
-  const listed = await runExternal("polyrepo-consumer", ["list"], cwd);
+const isWorkspaceRoot: WorkspaceRootCheck = async (path) => {
+  const repository = await run(["root"], path);
+  const root = repository.stdout.trim();
+  return repository.code === 0 && root !== "" && resolve(root) === resolve(path);
+};
+
+export const discoverConsumers = async (
+  cwd: string,
+  listConsumers: ConsumerLister = (root) => runExternal("polyrepo-consumer", ["list"], root),
+  workspaceRoot: WorkspaceRootCheck = isWorkspaceRoot,
+): Promise<string[]> => {
+  // The generated helper may be globally installed for a different domain, so
+  // successful execution alone does not establish that cwd is a polyrepo root.
+  // Require every listed path to be a direct child and an actual jj workspace
+  // root. This also lets an umbrella root be a jj repository without hiding its
+  // consumer workspaces.
+  const listed = await listConsumers(cwd);
   if (listed.code === 0) {
     const paths = parseConsumers(listed.stdout, cwd);
-    if (paths.length) return paths;
+    const domainRoot = resolve(cwd);
+    const directChildren = paths.length > 0 && paths.every((path) => dirname(resolve(path)) === domainRoot);
+    if (directChildren && (await Promise.all(paths.map(workspaceRoot))).every(Boolean)) return paths;
   }
   return [targetWorkspace(cwd)];
 };
@@ -214,7 +225,7 @@ export default function (pi: ExtensionAPI) {
     // Delegated Pi processes inherit the global extensions. They must not
     // create changes for their individual review/research runs.
     if (!enabled || isSubagent || isPocketSession() || isDescriberSession() || task) return;
-    const workspaceList = await consumers(ctx.cwd);
+    const workspaceList = await discoverConsumers(ctx.cwd);
     const snapshots = new Map<string, WorkingCopy>();
     const guarded = new Set<string>();
     const primary = targetWorkspace(ctx.cwd);
