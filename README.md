@@ -14,7 +14,13 @@ Bun and `jq` are provided by the development shell; they do not need to be insta
 Run the packaged agent directly (the configuration directory is required):
 
 ```sh
-PI_CONFIG_DIR="$PWD/.pi" nix run
+PI_CONFIG_DIR="$PWD/.pi" nix run .
+```
+
+Pass arguments through to Pi after the installable and `--` separator:
+
+```sh
+PI_CONFIG_DIR="$PWD/.pi" nix run . -- --help
 ```
 
 Enter a development shell:
@@ -46,13 +52,13 @@ nix flake update
 The wrapper uses the immutable packaged Pi configuration from `PI_CONFIG_DIR`, which defaults to its `/nix/store` path. It overlays that configuration into the writable user directory `~/.pi/agent`; sessions, settings, and logs therefore remain outside the Nix store. Override the writable agent directory with `PI_AGENT_DIR` when needed:
 
 ```sh
-PI_AGENT_DIR="$PWD/.pi/agent" nix run
+PI_AGENT_DIR="$PWD/.pi/agent" nix run .
 ```
 
 To use another immutable configuration source:
 
 ```sh
-PI_CONFIG_DIR=/path/to/config nix run
+PI_CONFIG_DIR=/path/to/config nix run .
 ```
 
 Packaged agents are available as both Pi agents and prompts. Project extensions and the default permission policy are linked into the writable overlay, while their contents remain immutable in the package.
