@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 type JjResult = {
   code: number;
@@ -36,7 +36,8 @@ const isPocketSession = () => process.env.PI_POCKET_SESSION === "1";
 // The nested `pi --no-tools --print` describer process inherits the installed
 // extensions. Verified empirically that it only snapshots the working copy, but
 // flag it anyway so it can never establish a change boundary for its own run.
-const isDescriberSession = () => process.env.PI_COMMITTING_DESCRIBE_SESSION === "1";
+const isDescriberSession = () =>
+  process.env.PI_COMMITTING_DESCRIBE_SESSION === "1";
 
 // Polyrepo consumers can set this to the workspace that owns the current task.
 // Keeping the selector as an environment contract avoids embedding domain-specific
@@ -44,7 +45,11 @@ const isDescriberSession = () => process.env.PI_COMMITTING_DESCRIBE_SESSION === 
 // Pi's cwd; absolute paths are used as-is.
 export const targetWorkspace = (cwd: string) => {
   const configured = process.env.PI_COMMITTING_WORKSPACE?.trim();
-  return configured ? (isAbsolute(configured) ? configured : resolve(cwd, configured)) : cwd;
+  return configured
+    ? isAbsolute(configured)
+      ? configured
+      : resolve(cwd, configured)
+    : cwd;
 };
 
 const run = (args: string[], cwd: string, input?: string): Promise<JjResult> =>
@@ -64,11 +69,17 @@ const run = (args: string[], cwd: string, input?: string): Promise<JjResult> =>
       // Do not use a shell here. The extension is deliberately only asking jj
       // to inspect the repository or create a child change.
       const isDescribe = args[0] === "__pi_describe__";
-      child = spawn(isDescribe ? "pi" : "jj", isDescribe ? args.slice(1) : args, {
-        cwd,
-        stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
-        env: isDescribe ? { ...process.env, PI_COMMITTING_DESCRIBE_SESSION: "1" } : process.env,
-      });
+      child = spawn(
+        isDescribe ? "pi" : "jj",
+        isDescribe ? args.slice(1) : args,
+        {
+          cwd,
+          stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+          env: isDescribe
+            ? { ...process.env, PI_COMMITTING_DESCRIBE_SESSION: "1" }
+            : process.env,
+        },
+      );
     } catch (error) {
       finish({ code: 127, stdout, stderr: String(error) });
       return;
@@ -98,56 +109,133 @@ const workingCopy = async (cwd: string): Promise<WorkingCopy | null> => {
   // backslash-n rather than a newline. Use double quotes so the separator is a
   // real newline and the parsed ids stay usable inside revsets.
   const [operation, changeId, diff] = await Promise.all([
-    run(["op", "log", "-n", "1", "-T", 'id ++ "\\n"', "--no-graph", "--no-pager"], cwd),
-    run(["log", "-r", "@", "-T", 'change_id ++ "\\n"', "--no-graph", "--no-pager"], cwd),
+    run(
+      ["op", "log", "-n", "1", "-T", 'id ++ "\\n"', "--no-graph", "--no-pager"],
+      cwd,
+    ),
+    run(
+      [
+        "log",
+        "-r",
+        "@",
+        "-T",
+        'change_id ++ "\\n"',
+        "--no-graph",
+        "--no-pager",
+      ],
+      cwd,
+    ),
     run(["diff", "--git", "--no-pager"], cwd),
   ]);
-  if (operation.code !== 0 || changeId.code !== 0 || diff.code !== 0) return null;
-  return { operationId: operation.stdout.trim(), changeId: changeId.stdout.trim(), diff: diff.stdout };
+  if (operation.code !== 0 || changeId.code !== 0 || diff.code !== 0)
+    return null;
+  return {
+    operationId: operation.stdout.trim(),
+    changeId: changeId.stdout.trim(),
+    diff: diff.stdout,
+  };
 };
 
 export const parseConsumers = (stdout: string, cwd: string): string[] =>
-  stdout.split("\n").map((p) => p.trim()).filter(Boolean).map((p) => isAbsolute(p) ? p : resolve(cwd, p));
+  stdout
+    .split("\n")
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => (isAbsolute(p) ? p : resolve(cwd, p)));
 
-const consumers = async (cwd: string): Promise<string[]> => {
-  // `polyrepo-consumer` is available globally, so its presence is not proof
-  // that the current directory is a polyrepo root.  In an ordinary jj repo,
-  // asking it for its generated project list can return paths belonging to a
-  // different workspace (or paths that do not exist), which makes committing
-  // mode watch the wrong working copy.  A polyrepo root deliberately is not a
-  // jj repository; use that distinction before attempting discovery.
-  const repository = await run(["root"], cwd);
-  if (repository.code === 0) return [cwd];
+type ConsumerLister = (cwd: string) => Promise<JjResult>;
+type WorkspaceRootCheck = (path: string) => Promise<boolean>;
 
-  const listed = await runExternal("polyrepo-consumer", ["list"], cwd);
+const isWorkspaceRoot: WorkspaceRootCheck = async (path) => {
+  const repository = await run(["root"], path);
+  const root = repository.stdout.trim();
+  return (
+    repository.code === 0 && root !== "" && resolve(root) === resolve(path)
+  );
+};
+
+export const discoverConsumers = async (
+  cwd: string,
+  listConsumers: ConsumerLister = (root) =>
+    runExternal("polyrepo-consumer", ["list"], root),
+  workspaceRoot: WorkspaceRootCheck = isWorkspaceRoot,
+): Promise<string[]> => {
+  // The generated helper may be globally installed for a different domain, so
+  // successful execution alone does not establish that cwd is a polyrepo root.
+  // Require every listed path to be a direct child and an actual jj workspace
+  // root. This also lets an umbrella root be a jj repository without hiding its
+  // consumer workspaces.
+  const listed = await listConsumers(cwd);
   if (listed.code === 0) {
     const paths = parseConsumers(listed.stdout, cwd);
-    if (paths.length) return paths;
+    const domainRoot = resolve(cwd);
+    const directChildren =
+      paths.length > 0 &&
+      paths.every((path) => dirname(resolve(path)) === domainRoot);
+    if (
+      directChildren &&
+      (await Promise.all(paths.map(workspaceRoot))).every(Boolean)
+    )
+      return paths;
   }
   return [targetWorkspace(cwd)];
 };
 
-const runExternal = (program: string, args: string[], cwd: string): Promise<JjResult> =>
+const runExternal = (
+  program: string,
+  args: string[],
+  cwd: string,
+): Promise<JjResult> =>
   new Promise((resolve) => {
-    const child = spawn(program, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "", stderr = "";
-    child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (x) => stdout += x); child.stderr.on("data", (x) => stderr += x);
+    const child = spawn(program, args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "",
+      stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (x) => (stdout += x));
+    child.stderr.on("data", (x) => (stderr += x));
     child.on("error", (e) => resolve({ code: 127, stdout, stderr: String(e) }));
     child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
   });
 
-export const taskRangeRevset = (baselineChangeId: string) => `(${baselineChangeId}::@) & mutable()`;
+export const taskRangeRevset = (baselineChangeId: string) =>
+  `(${baselineChangeId}::@) & mutable()`;
 
-const taskChanges = async (baselineChangeId: string, cwd: string): Promise<string[] | null> => {
-  const result = await run(["log", "-r", taskRangeRevset(baselineChangeId), "-T", 'change_id ++ "\\n"', "--no-graph", "--no-pager"], cwd);
+const taskChanges = async (
+  baselineChangeId: string,
+  cwd: string,
+): Promise<string[] | null> => {
+  const result = await run(
+    [
+      "log",
+      "-r",
+      taskRangeRevset(baselineChangeId),
+      "-T",
+      'change_id ++ "\\n"',
+      "--no-graph",
+      "--no-pager",
+    ],
+    cwd,
+  );
   if (result.code !== 0) return null;
-  return result.stdout.split("\n").map((id) => id.trim()).filter(Boolean);
+  return result.stdout
+    .split("\n")
+    .map((id) => id.trim())
+    .filter(Boolean);
 };
 
-const hasChanged = (before: WorkingCopy | undefined, after: WorkingCopy | null) =>
-  after !== null && after.diff.trim().length > 0 &&
-  (before === undefined || before.operationId !== after.operationId || before.diff !== after.diff);
+const hasChanged = (
+  before: WorkingCopy | undefined,
+  after: WorkingCopy | null,
+) =>
+  after !== null &&
+  after.diff.trim().length > 0 &&
+  (before === undefined ||
+    before.operationId !== after.operationId ||
+    before.diff !== after.diff);
 
 const containsJjNew = (command: unknown) => {
   if (typeof command !== "string") return false;
@@ -158,11 +246,22 @@ const containsJjNew = (command: unknown) => {
 };
 
 const failedAgentEnd = (event: any) => {
-  if (event?.aborted === true || event?.success === false || event?.error != null) return true;
-  const terminalState = [event?.reason, event?.status, event?.stopReason].filter(
-    (value) => typeof value === "string",
-  );
-  if (terminalState.some((value) => ["error", "failed", "failure", "aborted", "cancelled"].includes(value))) {
+  if (
+    event?.aborted === true ||
+    event?.success === false ||
+    event?.error != null
+  )
+    return true;
+  const terminalState = [
+    event?.reason,
+    event?.status,
+    event?.stopReason,
+  ].filter((value) => typeof value === "string");
+  if (
+    terminalState.some((value) =>
+      ["error", "failed", "failure", "aborted", "cancelled"].includes(value),
+    )
+  ) {
     return true;
   }
   const messages = Array.isArray(event?.messages) ? event.messages : [];
@@ -177,14 +276,20 @@ export default function (pi: ExtensionAPI) {
   let enabled = enabledByEnvironment();
   let task: Task | undefined;
 
-  const notify = (ctx: any, message: string, level: "info" | "warning" | "error" = "info") => {
+  const notify = (
+    ctx: any,
+    message: string,
+    level: "info" | "warning" | "error" = "info",
+  ) => {
     if (ctx.hasUI) ctx.ui.notify(message, level);
   };
 
   pi.registerCommand("committing-mode", {
     description: "Enable or disable automatic jj changes after completed tasks",
     handler: async (args, ctx) => {
-      const value = String(args ?? "").trim().toLowerCase();
+      const value = String(args ?? "")
+        .trim()
+        .toLowerCase();
       if (["on", "enable", "enabled"].includes(value)) enabled = true;
       else if (["off", "disable", "disabled"].includes(value)) enabled = false;
       else if (value !== "" && value !== "status") {
@@ -213,8 +318,15 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_start", async (_event, ctx) => {
     // Delegated Pi processes inherit the global extensions. They must not
     // create changes for their individual review/research runs.
-    if (!enabled || isSubagent || isPocketSession() || isDescriberSession() || task) return;
-    const workspaceList = await consumers(ctx.cwd);
+    if (
+      !enabled ||
+      isSubagent ||
+      isPocketSession() ||
+      isDescriberSession() ||
+      task
+    )
+      return;
+    const workspaceList = await discoverConsumers(ctx.cwd);
     const snapshots = new Map<string, WorkingCopy>();
     const guarded = new Set<string>();
     const primary = targetWorkspace(ctx.cwd);
@@ -233,8 +345,19 @@ export default function (pi: ExtensionAPI) {
       }
       if (snapshot) snapshots.set(workspace, snapshot);
     }
-    if (guarded.size) notify(ctx, `Leaving pre-existing work untouched in: ${[...guarded].join(", ")}`, "warning");
-    task = { baseline: snapshots, workspaces: workspaceList, guarded, explicitNew: false, failed: false };
+    if (guarded.size)
+      notify(
+        ctx,
+        `Leaving pre-existing work untouched in: ${[...guarded].join(", ")}`,
+        "warning",
+      );
+    task = {
+      baseline: snapshots,
+      workspaces: workspaceList,
+      guarded,
+      explicitNew: false,
+      failed: false,
+    };
   });
 
   pi.on("agent_end", async (event) => {
@@ -247,7 +370,11 @@ export default function (pi: ExtensionAPI) {
   // Tracking at tool_call time also covers a blocked or interrupted command,
   // where creating a new change automatically would be unsafe.
   pi.on("tool_call", async (event) => {
-    if (task && event.toolName === "bash" && containsJjNew(event.input?.command)) {
+    if (
+      task &&
+      event.toolName === "bash" &&
+      containsJjNew(event.input?.command)
+    ) {
       task.explicitNew = true;
     }
   });
@@ -271,7 +398,11 @@ export default function (pi: ExtensionAPI) {
         // A failed ancestry query is a bug in this extension, not a normal
         // "nothing to do" outcome. Staying silent here hid a revset quoting
         // regression in which no change was ever described.
-        notify(ctx, `Committing mode could not resolve the task range in ${workspace}; skipping.`, "error");
+        notify(
+          ctx,
+          `Committing mode could not resolve the task range in ${workspace}; skipping.`,
+          "error",
+        );
         continue;
       }
       if (!range.includes(after.changeId)) continue;
@@ -285,46 +416,68 @@ export default function (pi: ExtensionAPI) {
       // the child. This mirrors sweep-rewrite's diff-to-commit-message prompt.
       const diff = after.diff;
       let describerPrompt: string;
-    try {
-      const agentsDir = process.env.PI_CONFIG_DIR
-        ? join(process.env.PI_CONFIG_DIR, "agents")
-        : join(process.env.HOME ?? "", ".pi", "agent", "agents");
-      describerPrompt = readFileSync(join(agentsDir, "jj-change-describer.md"), "utf8");
+      try {
+        const agentsDir = process.env.PI_CONFIG_DIR
+          ? join(process.env.PI_CONFIG_DIR, "agents")
+          : join(process.env.HOME ?? "", ".pi", "agent", "agents");
+        describerPrompt = readFileSync(
+          join(agentsDir, "jj-change-describer.md"),
+          "utf8",
+        );
       } catch (error) {
-        notify(ctx, `Committing mode could not load the jj change describer prompt: ${String(error)}`, "error");
+        notify(
+          ctx,
+          `Committing mode could not load the jj change describer prompt: ${String(error)}`,
+          "error",
+        );
         continue;
       }
       const model = process.env.PI_COMMITTING_MODEL?.trim();
       const descriptionArgs = [
         "__pi_describe__",
         ...(model ? ["--model", model] : []),
-        "--append-system-prompt", describerPrompt, "--no-session", "--no-tools", "--print",
+        "--append-system-prompt",
+        describerPrompt,
+        "--no-session",
+        "--no-tools",
+        "--print",
       ];
       const description = await run(descriptionArgs, workspace, diff);
       if (description.code !== 0 || description.stdout.trim() === "") {
-      notify(
-        ctx,
-        `Committing mode failed: could not generate a jj change description${description.stderr.trim() ? ` (${description.stderr.trim()})` : ` (nested Pi exited with code ${description.code})`}`, 
-        "error",
-      );
+        notify(
+          ctx,
+          `Committing mode failed: could not generate a jj change description${description.stderr.trim() ? ` (${description.stderr.trim()})` : ` (nested Pi exited with code ${description.code})`}`,
+          "error",
+        );
         continue;
       }
 
-      const described = await run(["describe", "--stdin"], workspace, description.stdout.trim());
+      const described = await run(
+        ["describe", "--stdin"],
+        workspace,
+        description.stdout.trim(),
+      );
       if (described.code !== 0) {
-      notify(ctx, `Committing mode could not apply the jj description${described.stderr.trim() ? `: ${described.stderr.trim()}` : "."}`, "error");
+        notify(
+          ctx,
+          `Committing mode could not apply the jj description${described.stderr.trim() ? `: ${described.stderr.trim()}` : "."}`,
+          "error",
+        );
         continue;
       }
 
       const result = await run(["new"], workspace);
       if (result.code === 0) {
-      notify(ctx, "Committing mode: described the completed change and started a new jj change.");
-    } else {
-      notify(
-        ctx,
-        `Committing mode could not run jj new${result.stderr.trim() ? `: ${result.stderr.trim()}` : "."}`,
-        "error",
-      );
+        notify(
+          ctx,
+          "Committing mode: described the completed change and started a new jj change.",
+        );
+      } else {
+        notify(
+          ctx,
+          `Committing mode could not run jj new${result.stderr.trim() ? `: ${result.stderr.trim()}` : "."}`,
+          "error",
+        );
       }
     }
   });
