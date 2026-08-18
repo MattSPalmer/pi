@@ -38,8 +38,9 @@
               let
                 contribution = import module moduleArgs;
               in
-              nixpkgs.lib.recursiveUpdate (nixpkgs.lib.removeAttrs acc [ "devShellPackages" ]) (
-                nixpkgs.lib.removeAttrs contribution [ "devShellPackages" ]
+              with nixpkgs.lib;
+              recursiveUpdate (removeAttrs acc [ "devShellPackages" ]) (
+                removeAttrs contribution [ "devShellPackages" ]
               )
               // {
                 devShellPackages = moduleOptions.options.devShellPackages.type.merge "devShellPackages" [
