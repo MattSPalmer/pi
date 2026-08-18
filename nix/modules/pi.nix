@@ -1,20 +1,25 @@
 { pkgs, ... }:
 let
-  piConfig = pkgs.runCommand "pi-config" { } ''
-    mkdir -p "$out/agent/extensions" "$out/agent/agents" "$out/agent/prompts"
-    ln -s ${../../domains/ai/permissions.json} "$out/agent/permissions.defaults.json"
-    for agent in ${../../domains/ai/agents}/*.md; do
-      ln -s "$agent" "$out/agent/agents/$(basename "$agent")"
-      ln -s "$agent" "$out/agent/prompts/$(basename "$agent")"
-    done
-    for extension in ${../../domains/ai/pi}/*/; do
-      name=$(basename "$extension")
-      case "$name" in
-        *.patch|*.test.ts) ;;
-        *) ln -s "$extension" "$out/agent/extensions/$name" ;;
-      esac
-    done
-  '';
+  piConfig = pkgs.stdenv.mkDerivation {
+    pname = "pi-config";
+    version = "1";
+    dontUnpack = true;
+    installPhase = ''
+      mkdir -p "$out/agent/extensions" "$out/agent/agents" "$out/agent/prompts"
+      ln -s ${../../domains/ai/permissions.json} "$out/agent/permissions.defaults.json"
+      for agent in ${../../domains/ai/agents}/*.md; do
+        ln -s "$agent" "$out/agent/agents/$(basename "$agent")"
+        ln -s "$agent" "$out/agent/prompts/$(basename "$agent")"
+      done
+      for extension in ${../../domains/ai/pi}/*/; do
+        name=$(basename "$extension")
+        case "$name" in
+          *.patch|*.test.ts) ;;
+          *) ln -s "$extension" "$out/agent/extensions/$name" ;;
+        esac
+      done
+    '';
+  };
   upstreamPi = pkgs.callPackage ../../pkgs/pi { };
   pi = pkgs.writeShellScriptBin "pi" ''
     set -euo pipefail
