@@ -69,13 +69,18 @@
             export PI_CODING_AGENT_DIR="$agent"
             exec ${upstreamPi}/bin/pi "$@"
           '';
+
         in
         {
           pi = pkgs.callPackage ./pkgs/pi { };
+          pi-config = piConfig;
           tree-sitter-bash-analyzer = treeSitterBashAnalyzer;
           default = pkgs.symlinkJoin {
             name = "pi-harness";
-            paths = [ self.packages.${system}.pi ];
+            paths = [
+              self.packages.${system}.pi
+              piConfig
+            ];
           };
         }
       );
