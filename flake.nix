@@ -30,51 +30,32 @@
             cargoLock.lockFile = ./research/tree-sitter-bash-analyzer/Cargo.lock;
             meta.mainProgram = "tree-sitter-bash-analyzer";
           };
-
-          # This is deliberately a package rather than a Home Manager module.
-          # `pi-setup` is safe to run from a shell, a login profile, or a
-          # launchd/systemd user service and keeps the mutable ~/.pi tree small:
-          # all project-owned files remain in the Nix store.
-          piConfig = pkgs.writeShellApplication {
-            name = "pi-setup";
-            runtimeInputs = [ pkgs.coreutils ];
-            text = ''
-               set -euo pipefail
-              # Override this for isolated profiles, tests, or another Pi
-              # installation. The default preserves Pi's normal location.
-              base="''${PI_CONFIG_DIR:-$HOME/.pi}"
-              agent="$base/agent"
-               mkdir -p "$agent/extensions" "$agent/bin"
-
-               link() {
-                 target="$1"
-                 source="$2"
-                 rm -rf "$target"
-                 ln -s "$source" "$target"
-               }
-
-               link "$agent/permissions.defaults.json" ${./domains/ai/permissions.json}
-               # Pi discovers extensions as children of ~/.pi/agent/extensions.
-               for extension in ${./domains/ai/pi}/*; do
-                 name="$(basename "$extension")"
-                 case "$name" in
-                   *.patch|*.test.ts) ;;
-                   *) link "$agent/extensions/$name" "$extension" ;;
-                 esac
-               done
-
-               printf 'Pi configuration linked under %s\\n' "$agent"
-            '';
-          };
+          # Keep the project-owned Pi configuration in the Nix store so the
+          # wrapped executable is self-contained and reproducible.
+          piConfig = pkgs.runCommand "pi-config" { } ''
+            mkdir -p "$out/agent/extensions"
+            ln -s ${./domains/ai/permissions.json} "$out/agent/permissions.defaults.json"
+            for extension in ${./domains/ai/pi}/*; do
+              name=$(basename "$extension")
+              case "$name" in
+                *.patch|*.test.ts) ;;
+                *) ln -s "$extension" "$out/agent/extensions/$name" ;;
+              esac
+            done
+          '';
+          upstreamPi = pkgs.callPackage ./pkgs/pi { };
+          pi = pkgs.writeShellScriptBin "pi" ''
+            export PI_CODING_AGENT_DIR=${piConfig}/agent
+            exec ${upstreamPi}/bin/pi "$@"
+          '';
         in
         {
-          pi = pkgs.callPackage ./pkgs/pi { };
           pi-config = piConfig;
           tree-sitter-bash-analyzer = treeSitterBashAnalyzer;
           default = pkgs.symlinkJoin {
             name = "pi-harness";
             paths = [
-              self.packages.${system}.pi
+              pi
               piConfig
             ];
           };
