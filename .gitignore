@@ -1,0 +1,6 @@
+# direnv
+.direnv
+
+*.swp
+.envrc
+result

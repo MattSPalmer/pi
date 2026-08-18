@@ -1,0 +1,239 @@
+{
+  "bash": {
+    "pwd": "allow",
+    "git": {
+      "action": "deny",
+      "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
+    },
+    "git *": {
+      "action": "deny",
+      "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
+    },
+    "find": {
+      "action": "deny",
+      "context": "find use is precluded entirely by fd (`fd --help` if you're unfamiliar)."
+    },
+    "find *": {
+      "action": "deny",
+      "context": "find use is precluded entirely by fd (`fd --help` if you're unfamiliar)."
+    },
+    "*/git": {
+      "action": "deny",
+      "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
+    },
+    "*/git *": {
+      "action": "deny",
+      "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
+    },
+    "rg": "allow",
+    "rg *": "allow",
+    "grep": {
+      "action": "deny",
+      "context": "grep use is precluded entirely by rg (`rg --help` if you're unfamiliar)."
+    },
+    "grep *": {
+      "action": "deny",
+      "context": "grep use is precluded entirely by rg (`rg --help` if you're unfamiliar)."
+    },
+    "ls": "allow",
+    "ls *": "allow",
+    "sort": "allow",
+    "sort *": "allow",
+    "uniq": "allow",
+    "uniq *": "allow",
+    "wc": "allow",
+    "wc *": "allow",
+    "tr": "allow",
+    "tr *": "allow",
+    "printf": "allow",
+    "printf *": "allow",
+    "head": "allow",
+    "head *": "allow",
+    "tail": "allow",
+    "tail *": "allow",
+    "gh pr view *": "allow",
+    "gh api *": "allow",
+    "gh api * --method *": "deny",
+    "gh api * --method=*": "deny",
+    "gh api --method * *": "deny",
+    "gh api --method=* *": "deny",
+    "gh api * -X *": "deny",
+    "gh api * -X*": "deny",
+    "gh api -X * *": "deny",
+    "gh api -X* *": "deny",
+    "gh api * --field *": "deny",
+    "gh api * --field=*": "deny",
+    "gh api * --raw-field *": "deny",
+    "gh api * --raw-field=*": "deny",
+    "gh api * --input *": "deny",
+    "gh api * --input=*": "deny",
+    "gh api * -F *": "deny",
+    "gh api * -F=*": "deny",
+    "gh api * -F*": "deny",
+    "gh api * -f *": "deny",
+    "gh api * -f=*": "deny",
+    "gh api * -f*": "deny",
+    "gh api * -i *": "deny",
+    "gh api * -i*": "deny"
+  },
+  "paths": {
+    "allow": [
+      "/nix/store/**",
+      "/dev/null"
+    ],
+    "deny": [
+      "/Users/*/.ssh/**",
+      "/Users/*/.aws/**",
+      "/Users/*/.gnupg/**"
+    ]
+  },
+  "jj": {
+    "DENY": [
+      {
+        "externalShell": "git"
+      }
+    ],
+    "READ": [
+      "diff",
+      "evolog",
+      "file list",
+      "file show",
+      "file search",
+      "file annotate",
+      "git fetch",
+      "help",
+      "log",
+      "operation log",
+      "operation diff",
+      "operation show",
+      "root",
+      "show",
+      "status",
+      "version",
+      "workspace list",
+      "evo",
+      "cm",
+      "ng",
+      "plain",
+      "cmng",
+      "np",
+      {
+        "externalShell": "jd"
+      },
+      {
+        "externalShell": "gd"
+      },
+      {
+        "externalShell": "jsh"
+      },
+      {
+        "externalShell": "jgf"
+      },
+      {
+        "externalShell": "jbl"
+      },
+      {
+        "externalShell": "jst"
+      },
+      {
+        "externalShell": "gst"
+      },
+      {
+        "externalShell": "jl"
+      },
+      {
+        "externalShell": "jdd"
+      }
+    ],
+    "WRITE": [
+      "abandon",
+      "absorb",
+      "arrange",
+      "bookmark",
+      "commit",
+      "describe",
+      "duplicate",
+      "edit",
+      "file chmod",
+      "file track",
+      "file untrack",
+      "metaedit",
+      "new",
+      "next",
+      "operation abandon",
+      "operation restore",
+      "operation revert",
+      "parallelize",
+      "prev",
+      "rebase",
+      "redo",
+      "resolve",
+      "restore",
+      "revert",
+      "simplify-parents",
+      "sparse",
+      "split",
+      "squash",
+      "undo",
+      "workspace add",
+      "workspace forget",
+      "workspace rename",
+      "workspace update-stale",
+      "desc",
+      "e",
+      "n",
+      {
+        "externalShell": "je"
+      },
+      {
+        "externalShell": "jn"
+      },
+      {
+        "externalShell": "jne"
+      },
+      {
+        "externalShell": "jsq"
+      },
+      {
+        "externalShell": "jb"
+      },
+      {
+        "externalShell": "jr"
+      },
+      {
+        "externalShell": "jdc"
+      },
+      {
+        "externalShell": "jddc"
+      },
+      {
+        "externalShell": "jep"
+      },
+      {
+        "externalShell": "jj_workspace_create"
+      },
+      {
+        "externalShell": "jj_workspace_forget"
+      },
+      {
+        "externalShell": "jj_workspace_sweep"
+      }
+    ],
+    "NETWORK": [
+      "git clone",
+      "git export",
+      "git import",
+      "git init",
+      "git push",
+      "git remote",
+      "sign",
+      "unsign",
+      {
+        "externalShell": "jgp"
+      }
+    ],
+    "ADMIN": [
+      "config"
+    ]
+  }
+}

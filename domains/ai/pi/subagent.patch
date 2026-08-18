@@ -1,0 +1,12 @@
+--- a/index.ts
++++ b/index.ts
+@@ -307 +307,2 @@
+-	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
++	if (agent.tools && agent.tools.length === 1 && agent.tools[0] === "none") args.push("--no-tools");
++	else if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+@@ -347,0 +349,5 @@
++				env: {
++					...process.env,
++					PATH: `${process.env.HOME}/.pi/agent/bin:${process.env.PATH ?? ""}`,
++					PI_SUBAGENT_NAME: agent.name,
++				},

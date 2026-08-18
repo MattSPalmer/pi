@@ -1,0 +1,11 @@
+{
+  "name": "permission-gate",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test ../../permission-gate.test.ts ../../permission-gate.generated.test.ts evaluate.test.ts shell-analysis.test.ts"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.1"
+  }
+}
