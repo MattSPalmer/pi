@@ -21,22 +21,25 @@ let
     '';
   };
   upstreamPi = pkgs.callPackage ../../pkgs/pi { };
-  pi = pkgs.writeShellScriptBin "pi" ''
-    set -euo pipefail
-    base="''${PI_CONFIG_DIR:?PI_CONFIG_DIR must be set}"
-    agent="$base/agent"
-    mkdir -p "$agent/extensions"
-    rm -rf "$agent/extensions/pocket" "$agent/extensions/agentic-20-questions.ts"
-    ln -sfn ${piConfig}/agent/agents "$agent/agents"
-    ln -sfn ${piConfig}/agent/prompts "$agent/prompts"
-    ln -sfn ${piConfig}/agent/permissions.defaults.json "$agent/permissions.defaults.json"
-    for extension in ${piConfig}/agent/extensions/*/; do
-      name="$(basename "$extension")"
-      ln -sfn "$extension" "$agent/extensions/$name"
-    done
-    export PI_CODING_AGENT_DIR="$agent"
-    exec ${upstreamPi}/bin/pi "$@"
-  '';
+  pi = pkgs.writeShellApplication {
+    name = "pi";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      base="''${PI_CONFIG_DIR:?PI_CONFIG_DIR must be set}"
+      agent="$base/agent"
+      mkdir -p "$agent/extensions"
+      rm -rf "$agent/extensions/pocket" "$agent/extensions/agentic-20-questions.ts"
+      ln -sfn ${piConfig}/agent/agents "$agent/agents"
+      ln -sfn ${piConfig}/agent/prompts "$agent/prompts"
+      ln -sfn ${piConfig}/agent/permissions.defaults.json "$agent/permissions.defaults.json"
+      for extension in ${piConfig}/agent/extensions/*/; do
+        name="$(basename "$extension")"
+        ln -sfn "$extension" "$agent/extensions/$name"
+      done
+      export PI_CODING_AGENT_DIR="$agent"
+      exec ${upstreamPi}/bin/pi "$@"
+    '';
+  };
 in
 {
   packages = {
