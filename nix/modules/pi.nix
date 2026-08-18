@@ -32,7 +32,6 @@ let
       base="''${PI_CONFIG_DIR:?PI_CONFIG_DIR must be set}"
       agent="$base/agent"
       mkdir -p "$agent/extensions"
-      rm -rf "$agent/extensions/pocket" "$agent/extensions/agentic-20-questions.ts"
       ln -sfn "$PI_CONFIG_SOURCE/agents" "$agent/agents"
       ln -sfn "$PI_CONFIG_SOURCE/prompts" "$agent/prompts"
       ln -sfn "$PI_CONFIG_SOURCE/permissions.defaults.json" "$agent/permissions.defaults.json"
