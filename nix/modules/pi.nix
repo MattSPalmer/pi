@@ -53,15 +53,18 @@ let
       packages.tree-sitter-bash-analyzer
     ]
     ++ altPackages;
-    runtimeEnv.PI_CONFIG_SOURCE = "${piConfig}/agent";
+    runtimeEnv.PI_CONFIG_DIR = "${piConfig}/agent";
     text = ''
-      base="''${PI_CONFIG_DIR:?PI_CONFIG_DIR must be set}"
-      agent="$base/agent"
+      # PI_CONFIG_DIR identifies the immutable packaged configuration.  The
+      # user's home remains the writable overlay for sessions, settings, and
+      # other Pi state.
+      config="$PI_CONFIG_DIR"
+      agent="''${HOME}/.pi/agent"
       mkdir -p "$agent/extensions"
-      ln -sfn "$PI_CONFIG_SOURCE/agents" "$agent/agents"
-      ln -sfn "$PI_CONFIG_SOURCE/prompts" "$agent/prompts"
-      ln -sfn "$PI_CONFIG_SOURCE/permissions.defaults.json" "$agent/permissions.defaults.json"
-      for extension in "$PI_CONFIG_SOURCE/extensions"/*/; do
+      ln -sfn "$config/agents" "$agent/agents"
+      ln -sfn "$config/prompts" "$agent/prompts"
+      ln -sfn "$config/permissions.defaults.json" "$agent/permissions.defaults.json"
+      for extension in "$config/extensions"/*/; do
         name="$(basename "$extension")"
         ln -sfn "$extension" "$agent/extensions/$name"
       done

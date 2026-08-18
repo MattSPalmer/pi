@@ -43,15 +43,15 @@ nix flake update
 
 ## Configuration
 
-The wrapper installs the repository's Pi configuration into the directory specified by `PI_CONFIG_DIR`. This variable must be set; the wrapper intentionally does not default to `$HOME/.pi`:
+The wrapper uses the immutable packaged Pi configuration from `PI_CONFIG_DIR`, which defaults to its `/nix/store` path. It overlays that configuration into the writable user directory `~/.pi/agent`; sessions, settings, and logs therefore remain outside the Nix store.
+
+To use another immutable configuration source:
 
 ```sh
-PI_CONFIG_DIR="$PWD/.pi" nix run
+PI_CONFIG_DIR=/path/to/config nix run
 ```
 
-If it is unset, the wrapper exits with an explanatory error before starting Pi.
-
-Packaged agents are available as both Pi agents and prompts. Project extensions and the default permission policy are linked into the same configuration directory. Mutable Pi state—sessions, settings, and logs—remains outside the Nix store.
+Packaged agents are available as both Pi agents and prompts. Project extensions and the default permission policy are linked into the writable overlay, while their contents remain immutable in the package.
 
 ## Repository layout
 
