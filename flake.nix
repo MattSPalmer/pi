@@ -45,7 +45,21 @@
           '';
           upstreamPi = pkgs.callPackage ./pkgs/pi { };
           pi = pkgs.writeShellScriptBin "pi" ''
-            export PI_CODING_AGENT_DIR=${piConfig}/agent
+            set -euo pipefail
+            base="''${PI_CONFIG_DIR:-$HOME/.pi}"
+            agent="$base/agent"
+            mkdir -p "$agent/extensions"
+
+            # The store artifact is immutable, while Pi must write sessions,
+            # settings, and logs. Keep those mutable state files in the
+            # selected base directory and link only the packaged config.
+            ln -sfn ${piConfig}/agent/permissions.defaults.json "$agent/permissions.defaults.json"
+            for extension in ${piConfig}/agent/extensions/*; do
+              name="$(basename "$extension")"
+              ln -sfn "$extension" "$agent/extensions/$name"
+            done
+
+            export PI_CODING_AGENT_DIR="$agent"
             exec ${upstreamPi}/bin/pi "$@"
           '';
         in
