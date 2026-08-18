@@ -1,87 +1,93 @@
 {
   "bash": {
-    "pwd": "allow",
-    "git": {
-      "action": "deny",
-      "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
-    },
-    "git *": {
-      "action": "deny",
-      "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
-    },
-    "find": {
-      "action": "deny",
-      "context": "find use is precluded entirely by fd (`fd --help` if you're unfamiliar)."
-    },
-    "find *": {
-      "action": "deny",
-      "context": "find use is precluded entirely by fd (`fd --help` if you're unfamiliar)."
-    },
-    "*/git": {
-      "action": "deny",
-      "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
-    },
-    "*/git *": {
-      "action": "deny",
-      "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
-    },
-    "rg": "allow",
-    "rg *": "allow",
-    "grep": {
-      "action": "deny",
-      "context": "grep use is precluded entirely by rg (`rg --help` if you're unfamiliar)."
-    },
-    "grep *": {
-      "action": "deny",
-      "context": "grep use is precluded entirely by rg (`rg --help` if you're unfamiliar)."
-    },
-    "ls": "allow",
-    "ls *": "allow",
-    "sort": "allow",
-    "sort *": "allow",
-    "uniq": "allow",
-    "uniq *": "allow",
-    "wc": "allow",
-    "wc *": "allow",
-    "tr": "allow",
-    "tr *": "allow",
-    "printf": "allow",
-    "printf *": "allow",
-    "head": "allow",
-    "head *": "allow",
-    "tail": "allow",
-    "tail *": "allow",
-    "gh pr view *": "allow",
-    "gh api *": "allow",
-    "gh api * --method *": "deny",
-    "gh api * --method=*": "deny",
-    "gh api --method * *": "deny",
-    "gh api --method=* *": "deny",
-    "gh api * -X *": "deny",
-    "gh api * -X*": "deny",
-    "gh api -X * *": "deny",
-    "gh api -X* *": "deny",
-    "gh api * --field *": "deny",
-    "gh api * --field=*": "deny",
-    "gh api * --raw-field *": "deny",
-    "gh api * --raw-field=*": "deny",
-    "gh api * --input *": "deny",
-    "gh api * --input=*": "deny",
-    "gh api * -F *": "deny",
-    "gh api * -F=*": "deny",
-    "gh api * -F*": "deny",
-    "gh api * -f *": "deny",
-    "gh api * -f=*": "deny",
-    "gh api * -f*": "deny",
-    "gh api * -i *": "deny",
-    "gh api * -i*": "deny"
+    "DENY": [
+      {
+        "command": "git",
+        "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
+      },
+      {
+        "command": "git *",
+        "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
+      },
+      {
+        "command": "find",
+        "context": "find use is precluded entirely by fd (`fd --help` if you're unfamiliar)."
+      },
+      {
+        "command": "find *",
+        "context": "find use is precluded entirely by fd (`fd --help` if you're unfamiliar)."
+      },
+      {
+        "command": "*/git",
+        "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
+      },
+      {
+        "command": "*/git *",
+        "context": "git use is precluded entirely by jj (`jj --help` if you're unfamiliar)."
+      },
+      {
+        "command": "grep",
+        "context": "grep use is precluded entirely by rg (`rg --help` if you're unfamiliar)."
+      },
+      {
+        "command": "grep *",
+        "context": "grep use is precluded entirely by rg (`rg --help` if you're unfamiliar)."
+      },
+      "gh api * --method *",
+      "gh api * --method=*",
+      "gh api --method * *",
+      "gh api --method=* *",
+      "gh api * -X *",
+      "gh api * -X*",
+      "gh api -X * *",
+      "gh api -X* *",
+      "gh api * --field *",
+      "gh api * --field=*",
+      "gh api * --raw-field *",
+      "gh api * --raw-field=*",
+      "gh api * --input *",
+      "gh api * --input=*",
+      "gh api * -F *",
+      "gh api * -F=*",
+      "gh api * -F*",
+      "gh api * -f *",
+      "gh api * -f=*",
+      "gh api * -f*",
+      "gh api * -i *",
+      "gh api * -i*"
+    ],
+    "READ": [
+      "pwd",
+      "rg",
+      "rg *",
+      "ls",
+      "ls *",
+      "sort",
+      "sort *",
+      "uniq",
+      "uniq *",
+      "wc",
+      "wc *",
+      "tr",
+      "tr *",
+      "printf",
+      "printf *",
+      "head",
+      "head *",
+      "tail",
+      "tail *"
+    ],
+    "NETWORK": [
+      "gh pr view *",
+      "gh api *"
+    ]
   },
   "paths": {
-    "allow": [
+    "READ": [
       "/nix/store/**",
       "/dev/null"
     ],
-    "deny": [
+    "DENY": [
       "/Users/*/.ssh/**",
       "/Users/*/.aws/**",
       "/Users/*/.gnupg/**"
