@@ -24,7 +24,7 @@ If the total payload is large (rough guideline: well over ~30 chunks or very lar
 
 ## 3. Fan out tier-1 lenses (parallel)
 
-Invoke these five subagents via your harness's delegation tool **in a single message, all in parallel** (they are independent — do not chain them):
+Invoke these five subagents via your harness's delegation tool (`task` in opencode, `subagent` in pi) **in a single message, all in parallel** (they are independent — do not chain them):
 
 - `review-lens-idiom`
 - `review-lens-api`

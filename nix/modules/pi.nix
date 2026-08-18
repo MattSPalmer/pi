@@ -2,9 +2,24 @@
   pkgs,
   packages,
   altPreferences,
+  models,
   ...
 }:
 let
+  agents = import ../agents.nix {
+    inherit (pkgs) lib;
+    inherit models;
+  };
+  writeMarkdown =
+    name: files:
+    pkgs.linkFarm name (
+      pkgs.lib.mapAttrsToList (file: text: {
+        name = file;
+        path = pkgs.writeText file text;
+      }) files
+    );
+  agentFiles = writeMarkdown "pi-agents" agents.piAgents;
+  promptFiles = writeMarkdown "pi-prompts" agents.piPrompts;
   basePermissions = builtins.fromJSON (builtins.readFile ../../permissions.json);
   altRules = builtins.concatLists (
     pkgs.lib.mapAttrsToList (
@@ -29,12 +44,13 @@ let
     version = "1";
     dontUnpack = true;
     installPhase = ''
-      mkdir -p "$out/agent/extensions" "$out/agent/agents" "$out/agent/prompts"
+      mkdir -p "$out/agent/extensions"
       ln -s ${permissionsFile} "$out/agent/permissions.defaults.json"
-      for agent in ${../../agents}/*.md; do
-        ln -s "$agent" "$out/agent/agents/$(basename "$agent")"
-        ln -s "$agent" "$out/agent/prompts/$(basename "$agent")"
-      done
+      # Subagent definitions and prompt templates are rendered from the shared
+      # registry: subagents carry name/model/tools frontmatter, prompts carry
+      # the argument hint.
+      ln -s ${agentFiles} "$out/agent/agents"
+      ln -s ${promptFiles} "$out/agent/prompts"
       for extension in ${../../pi}/*/; do
         name=$(basename "$extension")
         case "$name" in

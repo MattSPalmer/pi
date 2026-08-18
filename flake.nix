@@ -28,10 +28,6 @@
           find = mkAlt [ "find" "find *" ] "fd" [ pkgs.fd ];
           grep = mkAlt [ "grep" "grep *" ] "rg" [ pkgs.ripgrep ];
         };
-        moduleArgs = {
-          inherit pkgs altPreferences;
-          packages = result.packages;
-        };
         moduleOptions = import ./nix/options.nix { inherit (nixpkgs) lib; };
         modules = [
           ./nix/modules/pi.nix
@@ -40,41 +36,66 @@
           ./nix/modules/pi-extensions.nix
           ./nix/modules/committing-mode.nix
         ];
-        result =
-          builtins.foldl'
-            (
-              acc: module:
-              let
-                contribution = import module moduleArgs;
-              in
-              with nixpkgs.lib;
-              recursiveUpdate (removeAttrs acc [ "devShellPackages" ]) (
-                removeAttrs contribution [ "devShellPackages" ]
-              )
-              // {
-                devShellPackages = moduleOptions.options.devShellPackages.type.merge "devShellPackages" [
-                  {
-                    file = "acc";
-                    value = acc.devShellPackages;
+        # Models are host policy, so the outputs are built as a function of
+        # them: the flake's own outputs use the registry defaults, while
+        # consumers can build a configuration for their own model choices.
+        mkResult =
+          models:
+          let
+            moduleArgs = {
+              inherit pkgs altPreferences models;
+              packages = result.packages;
+            };
+            result =
+              builtins.foldl'
+                (
+                  acc: module:
+                  let
+                    contribution = import module moduleArgs;
+                  in
+                  with nixpkgs.lib;
+                  recursiveUpdate (removeAttrs acc [ "devShellPackages" ]) (
+                    removeAttrs contribution [ "devShellPackages" ]
+                  )
+                  // {
+                    devShellPackages = moduleOptions.options.devShellPackages.type.merge "devShellPackages" [
+                      {
+                        file = "acc";
+                        value = acc.devShellPackages;
+                      }
+                      {
+                        file = "${toString module}";
+                        value = contribution.devShellPackages or [ ];
+                      }
+                    ];
                   }
-                  {
-                    file = "${toString module}";
-                    value = contribution.devShellPackages or [ ];
-                  }
-                ];
-              }
-            )
-            {
-              packages = { };
-              checks = { };
-              devShellPackages = [ ];
-            }
-            modules;
+                )
+                {
+                  packages = { };
+                  checks = { };
+                  devShellPackages = [ ];
+                }
+                modules;
+          in
+          result;
+        result = mkResult { };
       in
       (nixpkgs.lib.removeAttrs result [ "devShellPackages" ])
       // {
         devShells.default = pkgs.mkShell {
           packages = nixpkgs.lib.unique result.devShellPackages;
+        };
+
+        # Consumers (other harnesses, other hosts) build from the same registry
+        # and the same packaged configuration.
+        lib = {
+          agents =
+            models:
+            import ./nix/agents.nix {
+              inherit (nixpkgs) lib;
+              inherit models;
+            };
+          mkPi = models: (mkResult models).packages.pi;
         };
       }
     );
