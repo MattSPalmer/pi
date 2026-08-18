@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, packages, ... }:
 let
   piConfig = pkgs.stdenv.mkDerivation {
     pname = "pi-config";
@@ -26,6 +26,7 @@ let
     runtimeInputs = [
       pkgs.coreutils
       upstreamPi
+      packages.tree-sitter-bash-analyzer
     ];
     runtimeEnv.PI_CONFIG_SOURCE = "${piConfig}/agent";
     text = ''

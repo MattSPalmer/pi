@@ -1,6 +1,6 @@
 # Pi Harness
 
-A reproducible [Pi coding agent](https://github.com/earendil-works/pi) setup packaged with Nix. The flake builds Pi, installs the project-owned agents and extensions, and includes a Bash permission analyzer used by the test suite.
+A reproducible [Pi coding agent](https://github.com/earendil-works/pi) setup packaged with Nix. The flake builds Pi, installs the project-owned agents and extensions, and bundles the Rust-based Bash permission analyzer used by the permission-gate extension.
 
 ## Requirements
 
@@ -55,7 +55,8 @@ Packaged agents are available as both Pi agents and prompts. Project extensions 
 
 ## Repository layout
 
-- `flake.nix` — package, development shell, and check definitions
+- `flake.nix` — flake inputs and system output composition
+- `nix/modules/` — output-contributing modules for Pi, the analyzer, the development shell, and checks
 - `pkgs/pi/` — pinned, offline Nix build of the upstream Pi coding agent
 - `domains/ai/agents/` — project agents and prompts
 - `domains/ai/pi/` — project Pi extensions and their tests
@@ -65,7 +66,7 @@ Packaged agents are available as both Pi agents and prompts. Project extensions 
 
 ## Development
 
-Most TypeScript extension checks run through the Nix check named `piExtensions`. The permission gate is checked separately as `permissionGate`, and the Rust analyzer is built as `tree-sitter-bash-analyzer`.
+The Pi wrapper puts the Rust analyzer on `PATH`, so the permission-gate extension resolves its default `tree-sitter-bash-analyzer` command at runtime. Set `PI_PERMISSION_ANALYZER` to override that command. Most TypeScript extension checks run through the Nix check named `piExtensions`; the permission gate is checked separately as `permissionGate`, and `tree-sitter-bash-analyzer` is also exposed as a package and build check.
 
 To inspect the available flake outputs:
 
