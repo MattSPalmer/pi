@@ -23,21 +23,25 @@ let
   upstreamPi = pkgs.callPackage ../../pkgs/pi { };
   pi = pkgs.writeShellApplication {
     name = "pi";
-    runtimeInputs = [ pkgs.coreutils ];
+    runtimeInputs = [
+      pkgs.coreutils
+      upstreamPi
+    ];
+    runtimeEnv.PI_CONFIG_SOURCE = "${piConfig}/agent";
     text = ''
       base="''${PI_CONFIG_DIR:?PI_CONFIG_DIR must be set}"
       agent="$base/agent"
       mkdir -p "$agent/extensions"
       rm -rf "$agent/extensions/pocket" "$agent/extensions/agentic-20-questions.ts"
-      ln -sfn ${piConfig}/agent/agents "$agent/agents"
-      ln -sfn ${piConfig}/agent/prompts "$agent/prompts"
-      ln -sfn ${piConfig}/agent/permissions.defaults.json "$agent/permissions.defaults.json"
-      for extension in ${piConfig}/agent/extensions/*/; do
+      ln -sfn "$PI_CONFIG_SOURCE/agents" "$agent/agents"
+      ln -sfn "$PI_CONFIG_SOURCE/prompts" "$agent/prompts"
+      ln -sfn "$PI_CONFIG_SOURCE/permissions.defaults.json" "$agent/permissions.defaults.json"
+      for extension in "$PI_CONFIG_SOURCE/extensions"/*/; do
         name="$(basename "$extension")"
         ln -sfn "$extension" "$agent/extensions/$name"
       done
       export PI_CODING_AGENT_DIR="$agent"
-      exec ${upstreamPi}/bin/pi "$@"
+      exec pi "$@"
     '';
   };
 in
