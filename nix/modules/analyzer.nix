@@ -3,8 +3,8 @@ let
   analyzer = pkgs.rustPlatform.buildRustPackage {
     pname = "tree-sitter-bash-analyzer";
     version = "0.1.0";
-    src = ../../research/tree-sitter-bash-analyzer;
-    cargoLock.lockFile = ../../research/tree-sitter-bash-analyzer/Cargo.lock;
+    src = ../../pi/permission-gate/analyzer;
+    cargoLock.lockFile = ../../pi/permission-gate/analyzer/Cargo.lock;
     meta.mainProgram = "tree-sitter-bash-analyzer";
   };
 in

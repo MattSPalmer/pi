@@ -19,9 +19,9 @@ Unsupported shell constructs, parser errors, dynamic words, or commands whose ar
 ## Run
 
 ```sh
-cargo run --manifest-path research/tree-sitter-bash-analyzer/Cargo.toml -- 'jj status && jj diff'
-printf 'rg foo file\nrm file\n' | cargo run --manifest-path research/tree-sitter-bash-analyzer/Cargo.toml
-cargo run --manifest-path research/tree-sitter-bash-analyzer/Cargo.toml -- audit \
+cargo run --manifest-path pi/permission-gate/analyzer/Cargo.toml -- 'jj status && jj diff'
+printf 'rg foo file\nrm file\n' | cargo run --manifest-path pi/permission-gate/analyzer/Cargo.toml
+cargo run --manifest-path pi/permission-gate/analyzer/Cargo.toml -- audit \
   --log ~/.pi/permission-requests.jsonl \
   --top 25
 ```

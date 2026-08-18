@@ -62,7 +62,7 @@ Packaged agents are available as both Pi agents and prompts. Project extensions 
 - `pi/` — project Pi extensions and their tests
 - `permissions.json` — default permission policy
 - `llm/` — session database and LLM integration tools
-- `research/tree-sitter-bash-analyzer/` — Rust-based shell command analyzer
+- `pi/permission-gate/analyzer/` — Rust-based shell command analyzer
 - `docs/` — design notes and configuration documentation
 
 The top-level `agents/`, `pi/`, `llm/`, and `permissions.json` paths are the contents of the packaged end-to-end Pi configuration; they are intentionally not nested under a broader domain hierarchy.
