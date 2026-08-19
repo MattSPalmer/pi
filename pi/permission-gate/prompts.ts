@@ -15,7 +15,7 @@ export const annotateStatements = (entries: StatementAnnotation[]): string =>
       ? ` ${YELLOW}(${problems.join(", ")})${RESET}`
       : ` ${YELLOW}(no problems detected)${RESET}`;
     return `  - ${statement}${note}`;
-  }).join("\\n");
+  }).join("\n");
 
 /** Present a compound command as one bullet per parsed statement. */
 export const askBash = async (

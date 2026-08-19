@@ -65,8 +65,14 @@ const commandAnnotations = (classification: any): StatementAnnotation[] | undefi
     if (classification.kind === "unrecognized") problems.push("command is not allowlisted");
     if (classification.kind === "interpreter" || classification.kind === "opaque") problems.push("opaque command syntax");
     if (classification.rule?.glob) problems.push(`arg pattern: ${classification.rule.glob}`);
-    for (const path of [ ...(analysis?.paths ?? []), ...(analysis?.redirects ?? []) ]) {
-      if (analysis?.commands?.[index]?.includes(path)) problems.push(`path: ${path}`);
+    const argv = analysis?.commandArgv?.[index] ?? [];
+    const paths = new Set([
+      ...(analysis?.paths ?? []),
+      ...(analysis?.redirects ?? []),
+    ]);
+    for (const path of paths) {
+      const looksLikePath = /^(?:~(?:\/|$)|\/(?:\/|$)|\.\.?(?:\/|$))/.test(path) || path.includes("/");
+      if (looksLikePath && argv.includes(path)) problems.push(`path: ${path}`);
     }
     return { statement, problems };
   });
