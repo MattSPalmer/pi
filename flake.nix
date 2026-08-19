@@ -45,7 +45,12 @@
           models:
           let
             moduleArgs = {
-              inherit pkgs altPreferences models piExtensions;
+              inherit
+                pkgs
+                altPreferences
+                models
+                piExtensions
+                ;
               packages = result.packages;
             };
             result =
@@ -91,6 +96,11 @@
         # Consumers (other harnesses, other hosts) build from the same registry
         # and the same packaged configuration.
         lib = {
+          # Expose the option defaults so downstream flakes can extend or
+          # override the shared command alternatives and extension selection.
+          bashAlts = altPreferences;
+          extensionOpts = piExtensions;
+
           agents =
             models:
             import ./nix/agents.nix {
