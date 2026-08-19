@@ -2,11 +2,30 @@ import { dirname, join, normalize } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 
 export type Action = "allow" | "ask" | "deny";
-export type Rule = { glob: string; action: Action; context?: string; source: string; tier: number; specificity: number };
-const escapeRegex = (value: string) => value.replace(/[|\\{}()[\]^$+*?.-]/g, "\\$&");
-const categories = ["DENY", "ALT", "READ", "WRITE", "NETWORK", "ADMIN"] as const;
+export type Rule = {
+  glob: string;
+  action: Action;
+  context?: string;
+  source: string;
+  tier: number;
+  specificity: number;
+};
+const escapeRegex = (value: string) =>
+  value.replace(/[|\\{}()[\]^$+*?.-]/g, "\\$&");
+const categories = [
+  "DENY",
+  "ALT",
+  "READ",
+  "WRITE",
+  "NETWORK",
+  "ADMIN",
+] as const;
 const categoryAction = (category: (typeof categories)[number]): Action =>
-  category === "DENY" || category === "ALT" ? "deny" : category === "READ" ? "allow" : "ask";
+  category === "DENY" || category === "ALT"
+    ? "deny"
+    : category === "READ"
+      ? "allow"
+      : "ask";
 const addCategorizedRules = (
   target: Record<string, { action: Action; context?: string }>,
   section: any,
@@ -16,16 +35,22 @@ const addCategorizedRules = (
   if (!section || typeof section !== "object") return;
   for (const category of categories) {
     for (const item of section[category] ?? []) {
-      const value = typeof item === "string" ? item : item?.command ?? item?.externalShell ?? item?.path;
+      const value =
+        typeof item === "string"
+          ? item
+          : (item?.command ?? item?.externalShell ?? item?.path);
       if (typeof value !== "string") continue;
       const suffix = jj && !item?.externalShell ? `${value}*` : value;
       target[`${prefix}${suffix}`] = {
         action: categoryAction(category),
         // ALT entries carry the safer replacement in `context`; preserve it
         // so the gate can explain why the command was blocked.
-        context: typeof item === "object" && item !== null && typeof item.context === "string"
-          ? item.context
-          : undefined,
+        context:
+          typeof item === "object" &&
+          item !== null &&
+          typeof item.context === "string"
+            ? item.context
+            : undefined,
       };
     }
   }
@@ -47,6 +72,14 @@ export const projectPolicyFiles = (cwd: string, home: string): string[] => {
   const globalOverrides = join(home, ".pi", "agent", "permissions.json");
   if (existsSync(globalDefaults)) files.push(globalDefaults);
   if (existsSync(globalOverrides)) files.push(globalOverrides);
+  // Delegated agents carry a narrower policy in the immutable packaged
+  // configuration. Keep this as the highest-precedence layer so an agent's
+  // restrictions cannot be widened by a project policy or a user override.
+  const scope = process.env.PI_SUBAGENT_NAME;
+  if (configDir && scope && /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(scope)) {
+    const agentPolicy = join(configDir, "permissions", `${scope}.json`);
+    if (existsSync(agentPolicy)) files.push(agentPolicy);
+  }
   let current = normalize(cwd);
   while (true) {
     const file = join(current, ".pi", "permissions.json");
@@ -57,12 +90,17 @@ export const projectPolicyFiles = (cwd: string, home: string): string[] => {
   }
   return files;
 };
-export const projectRules = (cwd: string, axis: "bash" | "paths", home: string) => {
+export const projectRules = (
+  cwd: string,
+  axis: "bash" | "paths",
+  home: string,
+) => {
   const compiled: Rule[] = [];
   for (const [index, file] of projectPolicyFiles(cwd, home).entries()) {
     try {
       const policy = JSON.parse(readFileSync(file, "utf8")) as any;
-      const sourceRules: Record<string, { action: Action; context?: string }> = {};
+      const sourceRules: Record<string, { action: Action; context?: string }> =
+        {};
       if (axis === "bash") {
         if (
           policy.bash &&
@@ -76,7 +114,9 @@ export const projectRules = (cwd: string, axis: "bash" | "paths", home: string) 
             } else if (action && typeof action === "object") {
               const configured = (action as any).action;
               if (
-                (configured === "allow" || configured === "ask" || configured === "deny") &&
+                (configured === "allow" ||
+                  configured === "ask" ||
+                  configured === "deny") &&
                 ((action as any).context === undefined ||
                   typeof (action as any).context === "string")
               ) {
@@ -125,14 +165,32 @@ export const projectRules = (cwd: string, axis: "bash" | "paths", home: string) 
   }
   return compiled;
 };
-export const activateProjectRules = (cwd: string, rules: { bash: Rule[]; paths: Rule[] }, home: string) => {
-  const projectBash = projectRules(cwd, "bash", home).map((r) => ({ ...r, re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s") }));
-  const projectPaths = projectRules(cwd, "paths", home).map((r) => ({ ...r, re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s") }));
-  const bash = [...projectBash, ...rules.bash.map((r) => ({ ...r, re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s") }))].sort(
-    (a, b) => b.tier - a.tier || b.specificity - a.specificity,
-  );
-  const paths = [...projectPaths, ...rules.paths.map((r) => ({ ...r, re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s") }))].sort(
-    (a, b) => b.tier - a.tier || b.specificity - a.specificity,
-  );
+export const activateProjectRules = (
+  cwd: string,
+  rules: { bash: Rule[]; paths: Rule[] },
+  home: string,
+) => {
+  const projectBash = projectRules(cwd, "bash", home).map((r) => ({
+    ...r,
+    re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s"),
+  }));
+  const projectPaths = projectRules(cwd, "paths", home).map((r) => ({
+    ...r,
+    re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s"),
+  }));
+  const bash = [
+    ...projectBash,
+    ...rules.bash.map((r) => ({
+      ...r,
+      re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s"),
+    })),
+  ].sort((a, b) => b.tier - a.tier || b.specificity - a.specificity);
+  const paths = [
+    ...projectPaths,
+    ...rules.paths.map((r) => ({
+      ...r,
+      re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s"),
+    })),
+  ].sort((a, b) => b.tier - a.tier || b.specificity - a.specificity);
   return { bash, paths };
 };

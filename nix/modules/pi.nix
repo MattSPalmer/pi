@@ -21,6 +21,12 @@ let
     );
   agentFiles = writeMarkdown "pi-agents" agents.piAgents;
   promptFiles = writeMarkdown "pi-prompts" agents.piPrompts;
+  permissionFiles = pkgs.linkFarm "pi-agent-permissions" (
+    pkgs.lib.mapAttrsToList (name: agent: {
+      name = "${name}.json";
+      path = pkgs.writeText "${name}-permissions.json" (builtins.toJSON agent.permissions);
+    }) agents.agents
+  );
   basePermissions = builtins.fromJSON (builtins.readFile ../../permissions.json);
   altRules = builtins.concatLists (
     pkgs.lib.mapAttrsToList (
@@ -52,6 +58,7 @@ let
       # the argument hint.
       ln -s ${agentFiles} "$out/agent/agents"
       ln -s ${promptFiles} "$out/agent/prompts"
+      ln -s ${permissionFiles} "$out/agent/permissions"
       for extension in ${../../pi}/*/; do
         name=$(basename "$extension")
         case "$name" in
@@ -62,11 +69,7 @@ let
       ln -s ${subagentExtension} "$out/agent/extensions/subagent"
     '';
   };
-  upstreamPi =
-    if piPackage != null then
-      piPackage
-    else
-      pkgs.callPackage ../../pkgs/pi { };
+  upstreamPi = if piPackage != null then piPackage else pkgs.callPackage ../../pkgs/pi { };
   # The upstream subagent example is the basis for delegated agents. Patch it
   # so `tools: none` disables tools, subagents are identifiable at runtime, and
   # agent definitions are read from the packaged configuration rather than from
