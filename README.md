@@ -87,4 +87,24 @@ To inspect the available flake outputs:
 nix flake show
 ```
 
+Downstream flakes can build a Pi package with the shared Nix options. The
+option modules are merged with the packaged defaults, so individual Bash
+alternatives or extensions can be enabled without copying the full defaults:
+
+```nix
+pi.lib.${system}.mkPi {
+  modules = [
+    {
+      bashAlts.find.enable = true;
+      bashAlts.grep.enable = true;
+      extensionOpts.kagi-search.enable = true;
+    }
+  ];
+}
+```
+
+The evaluated defaults are also available as `lib.bashAlts` and
+`lib.extensionOpts`. Explicit `bashAlts` and `extensionOpts` arguments remain
+available when a consumer needs to replace those option values wholesale.
+
 Changes to packaged agents, extensions, permissions, or the analyzer are included automatically in the next Nix build. The Pi dependency itself is pinned in `pkgs/pi/default.nix` and should be updated together with its source and dependency hashes.

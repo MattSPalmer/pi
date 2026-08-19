@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  options.piExtensions = lib.mkOption {
+  options.extensionOpts = lib.mkOption {
     type = lib.types.attrsOf (
       lib.types.submodule {
         options.enable = lib.mkOption {
@@ -25,7 +25,7 @@
     description = "Pi extensions to package and load.";
   };
 
-  options.altPreferences = lib.mkOption {
+  options.bashAlts = lib.mkOption {
     type = lib.types.attrsOf (
       lib.types.submodule {
         options = {
@@ -51,7 +51,7 @@
       }
     );
     default = { };
-    description = "ALT command preferences, with optional packages implied by each preference.";
+    description = "Bash command alternatives, with optional packages implied by each alternative.";
   };
 
   options.devShellPackages = lib.mkOption {

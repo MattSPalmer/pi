@@ -24,14 +24,14 @@
           enable = false;
           context = "${builtins.head commands} use is precluded entirely by ${replacement} (`${replacement} --help` if you're unfamiliar).";
         };
-        altPreferences = {
+        bashAlts = {
           git = mkAlt [ "git" "git *" "*/git" "*/git *" ] "jj" [ pkgs.jujutsu ];
           find = mkAlt [ "find" "find *" ] "fd" [ pkgs.fd ];
           grep = mkAlt [ "grep" "grep *" ] "rg" [ pkgs.ripgrep ];
         };
         moduleOptions = import ./nix/options.nix { inherit (nixpkgs) lib; };
-        piExtensions = moduleOptions.options.piExtensions.default;
-        modules = [
+        extensionOpts = moduleOptions.options.extensionOpts.default;
+        piModules = [
           ./nix/modules/pi.nix
           ./nix/modules/analyzer.nix
           ./nix/modules/permission-gate.nix
@@ -41,18 +41,45 @@
         # Models are host policy, so the outputs are built as a function of
         # them: the flake's own outputs use the registry defaults, while
         # consumers can build a configuration for their own model choices.
+        mkConfig =
+          {
+            modules ? [ ],
+            bashAltsOverride ? null,
+            extensionOptsOverride ? null,
+          }:
+          (nixpkgs.lib.evalModules {
+            modules = [
+              moduleOptions
+              {
+                config = {
+                  # mkDefault provides the registry values while allowing
+                  # downstream modules to override individual options.
+                  bashAlts = nixpkgs.lib.mkDefault (if bashAltsOverride == null then bashAlts else bashAltsOverride);
+                  extensionOpts = nixpkgs.lib.mkDefault (
+                    if extensionOptsOverride == null then extensionOpts else extensionOptsOverride
+                  );
+                };
+              }
+            ]
+            ++ modules;
+          }).config;
         mkResult =
           {
             models ? { },
+            modules ? [ ],
             piPackage ? null,
-            bashAlts ? altPreferences,
-            extensionOpts ? piExtensions,
+            bashAlts ? null,
+            extensionOpts ? null,
           }:
           let
+            config = mkConfig {
+              inherit modules;
+              bashAltsOverride = bashAlts;
+              extensionOptsOverride = extensionOpts;
+            };
             moduleArgs = {
               inherit pkgs models piPackage;
-              altPreferences = bashAlts;
-              piExtensions = extensionOpts;
+              inherit (config) bashAlts extensionOpts;
               packages = result.packages;
             };
             result =
@@ -84,7 +111,7 @@
                   checks = { };
                   devShellPackages = [ ];
                 }
-                modules;
+                piModules;
           in
           result;
         result = mkResult { };
@@ -100,8 +127,7 @@
         lib = {
           # Expose the option defaults so downstream flakes can extend or
           # override the shared command alternatives and extension selection.
-          bashAlts = altPreferences;
-          extensionOpts = piExtensions;
+          inherit bashAlts extensionOpts;
 
           agents =
             models:
@@ -112,13 +138,15 @@
           mkPi =
             {
               models ? { },
+              modules ? [ ],
               piPackage ? null,
-              bashAlts ? altPreferences,
-              extensionOpts ? piExtensions,
+              bashAlts ? null,
+              extensionOpts ? null,
             }:
             (mkResult {
               inherit
                 models
+                modules
                 piPackage
                 bashAlts
                 extensionOpts
