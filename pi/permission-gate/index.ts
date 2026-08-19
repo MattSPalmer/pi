@@ -8,7 +8,7 @@ import {
   recordPermissionRequest,
   type AuditState,
 } from "./audit";
-import { askBash } from "./prompts";
+import { askBash, type StatementAnnotation } from "./prompts";
 import { activateProjectRules } from "./policy";
 import { rustAnalyzer } from "./shell-analysis";
 import {
@@ -54,6 +54,22 @@ const parentFolder = (value: string) => {
   const normalized = value.replace(/\/+$/, "");
   const slash = normalized.lastIndexOf("/");
   return slash > 0 ? normalized.slice(0, slash) : normalized;
+};
+
+const commandAnnotations = (classification: any): StatementAnnotation[] | undefined => {
+  const statements = classification.statements as string[];
+  const analysis = classification.analysis;
+  if (!statements?.length) return undefined;
+  return statements.map((statement, index) => {
+    const problems: string[] = [];
+    if (classification.kind === "unrecognized") problems.push("command is not allowlisted");
+    if (classification.kind === "interpreter" || classification.kind === "opaque") problems.push("opaque command syntax");
+    if (classification.rule?.glob) problems.push(`arg pattern: ${classification.rule.glob}`);
+    for (const path of [ ...(analysis?.paths ?? []), ...(analysis?.redirects ?? []) ]) {
+      if (analysis?.commands?.[index]?.includes(path)) problems.push(`path: ${path}`);
+    }
+    return { statement, problems };
+  });
 };
 
 const MAX_PATH_LENGTH = 4096;
@@ -261,6 +277,8 @@ export default function (pi: ExtensionAPI) {
         `opaque shell syntax (${classification.reason})`,
         command,
         event.toolName,
+        classification.statements,
+        commandAnnotations(classification),
       );
     }
     if (classification.kind === "interpreter")
@@ -270,6 +288,7 @@ export default function (pi: ExtensionAPI) {
         command,
         event.toolName,
         classification.statements,
+        commandAnnotations(classification),
       );
     // The remaining classifications all have a safe static analysis.
     if (!classification.analysis) return undefined;
@@ -296,6 +315,7 @@ export default function (pi: ExtensionAPI) {
         command,
         event.toolName,
         classification.statements,
+        commandAnnotations(classification),
       );
     if (classification.kind === "unrecognized") {
       // Path arguments are checked above, but passing the path gate must not
@@ -308,6 +328,7 @@ export default function (pi: ExtensionAPI) {
         command,
         event.toolName,
         analysis.commands,
+        commandAnnotations(classification),
       );
     }
         return undefined;
