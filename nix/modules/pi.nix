@@ -4,6 +4,7 @@
   altPreferences,
   models,
   piPackage ? null,
+  piExtensions,
   ...
 }:
 let
@@ -63,10 +64,16 @@ let
         name=$(basename "$extension")
         case "$name" in
           *.patch|*.test.ts) ;;
-          *) ln -s "$extension" "$out/agent/extensions/$name" ;;
+          *)
+            if ${if piExtensions.${name}.enable or false then "true" else "false"}; then
+              ln -s "$extension" "$out/agent/extensions/$name"
+            fi
+            ;;
         esac
       done
-      ln -s ${subagentExtension} "$out/agent/extensions/subagent"
+      if ${if piExtensions.subagent.enable or false then "true" else "false"}; then
+        ln -s ${subagentExtension} "$out/agent/extensions/subagent"
+      fi
     '';
   };
   upstreamPi = if piPackage != null then piPackage else pkgs.callPackage ../../pkgs/pi { };
