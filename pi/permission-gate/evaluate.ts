@@ -199,7 +199,15 @@ export function checkPathAgainstRules(
   };
 }
 
-function commandGrant(grants: Iterable<string>, command: string): string | undefined {
+function commandGrant(
+  grants: Iterable<string>,
+  command: string,
+  commandArgv: readonly string[][],
+): string | undefined {
+  // A command grant authorizes one parsed command invocation, not an entire
+  // shell program. In particular, never let a grant for `tool *` authorize
+  // `tool input; other-command` through a raw string prefix match.
+  if (commandArgv.length !== 1) return undefined;
   for (const pattern of grants) {
     const prefix = pattern.endsWith("*") ? pattern.slice(0, -1) : pattern;
     if (command === prefix || command.startsWith(prefix)) return pattern;
@@ -276,7 +284,11 @@ export function classifyCommand(options: {
     };
   }
 
-  const grant = commandGrant(options.sessionBashGrants ?? [], command);
+  const grant = commandGrant(
+    options.sessionBashGrants ?? [],
+    command,
+    analysis.commandArgv,
+  );
   if (grant) {
     return {
       command,

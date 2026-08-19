@@ -87,3 +87,19 @@ test("session command grants allow bounded command prefixes", () => {
     grants,
   }).verdict).toBe("allow");
 });
+
+test("session command grants do not authorize appended shell commands", () => {
+  const grants = { bash: ["formatter *"], paths: [] };
+  expect(evaluateAllowlist({
+    command: "formatter input; rm -rf ./target",
+    cwd,
+    rules,
+    grants,
+  }).verdict).toBe("needs-confirmation");
+  expect(evaluateAllowlist({
+    command: "formatter input && unknown-tool",
+    cwd,
+    rules,
+    grants,
+  }).verdict).toBe("needs-confirmation");
+});
