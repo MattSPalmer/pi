@@ -45,16 +45,14 @@
           {
             models ? { },
             piPackage ? null,
+            bashAlts ? altPreferences,
+            extensionOpts ? piExtensions,
           }:
           let
             moduleArgs = {
-              inherit
-                pkgs
-                altPreferences
-                models
-                piPackage
-                piExtensions
-                ;
+              inherit pkgs models piPackage;
+              altPreferences = bashAlts;
+              piExtensions = extensionOpts;
               packages = result.packages;
             };
             result =
@@ -115,9 +113,17 @@
             {
               models ? { },
               piPackage ? null,
-              ...
+              bashAlts ? altPreferences,
+              extensionOpts ? piExtensions,
             }:
-            (mkResult { inherit models piPackage; }).packages.pi;
+            (mkResult {
+              inherit
+                models
+                piPackage
+                bashAlts
+                extensionOpts
+                ;
+            }).packages.pi;
         };
       }
     );
