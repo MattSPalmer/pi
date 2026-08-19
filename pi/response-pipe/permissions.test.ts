@@ -39,6 +39,30 @@ test("allowlisted commands still require covered path arguments", () => {
   expect(evaluate(`cat ${join(root, "outside.txt")}`).verdict).toBe("needs-confirmation");
 });
 
+test("response-pipe applies delegated-agent policy restrictions", () => {
+  const configDir = join(root, "agent-config");
+  mkdirSync(join(configDir, "permissions"), { recursive: true });
+  writeFileSync(join(configDir, "permissions.defaults.json"), JSON.stringify({
+    bash: { "sort *": "allow" },
+    paths: { allow: [`${cwd}/**`] },
+  }));
+  writeFileSync(join(configDir, "permissions", "restricted.json"), JSON.stringify({
+    bash: { "sort *": { action: "deny", context: "agent is read-only" } },
+  }));
+  const previousConfig = process.env.PI_CONFIG_DIR;
+  const previousScope = process.env.PI_SUBAGENT_NAME;
+  process.env.PI_CONFIG_DIR = configDir;
+  process.env.PI_SUBAGENT_NAME = "restricted";
+  try {
+    expect(evaluate("sort input").verdict).toBe("deny");
+  } finally {
+    if (previousConfig === undefined) delete process.env.PI_CONFIG_DIR;
+    else process.env.PI_CONFIG_DIR = previousConfig;
+    if (previousScope === undefined) delete process.env.PI_SUBAGENT_NAME;
+    else process.env.PI_SUBAGENT_NAME = previousScope;
+  }
+});
+
 test("session grants are portable across the integration boundary", () => {
   const entries = [{
     type: "custom",

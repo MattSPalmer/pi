@@ -116,6 +116,31 @@ test("sensitive path boundaries do not overmatch", () => {
   expect(checkPathAgainstRules(join(home, ".sshx", "id_rsa"), cwd, rules.paths).status).toBe("unknown");
 });
 
+test("delegated-agent policy is applied as the highest-precedence layer", () => {
+  const configDir = join(root, "agent-config");
+  mkdirSync(join(configDir, "permissions"), { recursive: true });
+  writeFileSync(join(configDir, "permissions.defaults.json"), JSON.stringify({
+    bash: { "sort *": "allow" },
+    paths: { allow: [`${cwd}/**`] },
+  }));
+  writeFileSync(join(configDir, "permissions", "restricted.json"), JSON.stringify({
+    bash: { "sort *": { action: "deny", context: "agent is read-only" } },
+  }));
+  const previousConfig = process.env.PI_CONFIG_DIR;
+  const previousScope = process.env.PI_SUBAGENT_NAME;
+  process.env.PI_CONFIG_DIR = configDir;
+  process.env.PI_SUBAGENT_NAME = "restricted";
+  try {
+    const active = loadPolicyRules(cwd, home);
+    expect(evaluateAllowlist({ command: "sort input", cwd, rules: active }).verdict).toBe("deny");
+  } finally {
+    if (previousConfig === undefined) delete process.env.PI_CONFIG_DIR;
+    else process.env.PI_CONFIG_DIR = previousConfig;
+    if (previousScope === undefined) delete process.env.PI_SUBAGENT_NAME;
+    else process.env.PI_SUBAGENT_NAME = previousScope;
+  }
+});
+
 test("checks policy paths and persisted session grants without UI", () => {
   expect(checkPathAgainstRules(join(cwd, "input.txt"), cwd, rules.paths, [cwd]).status).toBe("allow");
   expect(checkPathAgainstRules(join(home, ".ssh", "id_rsa"), cwd, rules.paths).status).toBe("deny");

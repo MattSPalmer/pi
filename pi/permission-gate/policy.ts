@@ -47,6 +47,14 @@ export const projectPolicyFiles = (cwd: string, home: string): string[] => {
   const globalOverrides = join(home, ".pi", "agent", "permissions.json");
   if (existsSync(globalDefaults)) files.push(globalDefaults);
   if (existsSync(globalOverrides)) files.push(globalOverrides);
+  // Delegated agents carry a narrower policy in the immutable packaged
+  // configuration. Keep this as the highest-precedence layer so an agent's
+  // restrictions cannot be widened by a project policy or a user override.
+  const scope = process.env.PI_SUBAGENT_NAME;
+  if (configDir && scope && /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(scope)) {
+    const agentPolicy = join(configDir, "permissions", `${scope}.json`);
+    if (existsSync(agentPolicy)) files.push(agentPolicy);
+  }
   let current = normalize(cwd);
   while (true) {
     const file = join(current, ".pi", "permissions.json");
