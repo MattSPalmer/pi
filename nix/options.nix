@@ -1,13 +1,15 @@
 { lib, ... }:
 {
-  options.piExtensions = lib.mkOption {
-    type = lib.types.attrsOf (lib.types.submodule {
-      options.enable = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = "Whether to package this Pi extension.";
-      };
-    });
+  options.extensionOpts = lib.mkOption {
+    type = lib.types.attrsOf (
+      lib.types.submodule {
+        options.enable = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Whether to package this Pi extension.";
+        };
+      }
+    );
     default = {
       permission-gate.enable = true;
       propose-permission.enable = true;
@@ -23,7 +25,7 @@
     description = "Pi extensions to package and load.";
   };
 
-  options.altPreferences = lib.mkOption {
+  options.bashAlts = lib.mkOption {
     type = lib.types.attrsOf (
       lib.types.submodule {
         options = {
@@ -49,7 +51,7 @@
       }
     );
     default = { };
-    description = "ALT command preferences, with optional packages implied by each preference.";
+    description = "Bash command alternatives, with optional packages implied by each alternative.";
   };
 
   options.devShellPackages = lib.mkOption {
