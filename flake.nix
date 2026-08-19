@@ -21,6 +21,7 @@
         };
         mkAlt = commands: replacement: packages: {
           inherit commands packages;
+          enable = false;
           context = "${builtins.head commands} use is precluded entirely by ${replacement} (`${replacement} --help` if you're unfamiliar).";
         };
         altPreferences = {

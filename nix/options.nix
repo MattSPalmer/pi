@@ -27,6 +27,11 @@
     type = lib.types.attrsOf (
       lib.types.submodule {
         options = {
+          enable = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = "Whether to enforce this ALT preference and provide its replacement package.";
+          };
           commands = lib.mkOption {
             type = lib.types.listOf lib.types.str;
             description = "Commands that should be rejected in favor of this alternative.";

@@ -28,6 +28,7 @@ let
     }) agents.agents
   );
   basePermissions = builtins.fromJSON (builtins.readFile ../../permissions.json);
+  enabledAltPreferences = pkgs.lib.filterAttrs (_: alt: alt.enable or false) altPreferences;
   altRules = builtins.concatLists (
     pkgs.lib.mapAttrsToList (
       _: alt:
@@ -35,7 +36,7 @@ let
         inherit command;
         context = alt.context;
       }) alt.commands
-    ) altPreferences
+    ) enabledAltPreferences
   );
   permissions = basePermissions // {
     bash = basePermissions.bash // {
@@ -44,7 +45,7 @@ let
   };
   permissionsFile = pkgs.writeText "permissions.defaults.json" (builtins.toJSON permissions);
   altPackages = pkgs.lib.concatLists (
-    pkgs.lib.mapAttrsToList (_: alt: alt.packages or [ ]) altPreferences
+    pkgs.lib.mapAttrsToList (_: alt: alt.packages or [ ]) enabledAltPreferences
   );
   piConfig = pkgs.stdenv.mkDerivation {
     pname = "pi-config";
