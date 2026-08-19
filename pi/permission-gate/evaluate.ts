@@ -1,9 +1,13 @@
-import { basename, dirname, isAbsolute, join, normalize, resolve } from "node:path";
-import { realpathSync } from "node:fs";
 import {
-  activateProjectRules,
-  type Rule,
-} from "./policy";
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  normalize,
+  resolve,
+} from "node:path";
+import { realpathSync } from "node:fs";
+import { activateProjectRules, type Rule } from "./policy";
 import {
   deniedCommandRule,
   normalizedCommandRule,
@@ -64,16 +68,23 @@ export function loadPolicyRules(
   cwd: string,
   home = homeDirectory(),
 ): PolicyRules {
-  return activateProjectRules(cwd, { bash: [], paths: [] }, home) as PolicyRules;
+  return activateProjectRules(
+    cwd,
+    { bash: [], paths: [] },
+    home,
+  ) as PolicyRules;
 }
 
 /** Recover persisted grants without depending on Pi's session implementation. */
-export function sessionGrantsFromEntries(entries: Iterable<unknown>): SessionGrants {
+export function sessionGrantsFromEntries(
+  entries: Iterable<unknown>,
+): SessionGrants {
   const grants: SessionGrants = { bash: [], paths: [] };
   for (const value of entries) {
     if (!value || typeof value !== "object") continue;
     const entry = value as Record<string, unknown>;
-    if (entry.type !== "custom" || entry.customType !== PATH_GRANT_ENTRY) continue;
+    if (entry.type !== "custom" || entry.customType !== PATH_GRANT_ENTRY)
+      continue;
     const data = entry.data;
     if (!data || typeof data !== "object") continue;
     const record = data as Record<string, unknown>;
@@ -126,7 +137,8 @@ export function pathGrantRoots(
       .map((rule) => {
         const glob = expandHome(rule.glob, home);
         const wildcard = glob.indexOf("*");
-        if (wildcard < 0) return canonicalPath(normalize(glob)) ?? normalize(glob);
+        if (wildcard < 0)
+          return canonicalPath(normalize(glob)) ?? normalize(glob);
         const prefix = glob.slice(0, wildcard).replace(/\/+$/, "");
         if (!prefix) return undefined;
         const normalized = normalize(prefix);
@@ -170,7 +182,13 @@ export function checkPathAgainstRules(
   sessionPathGrants: Iterable<string> = [],
   home = homeDirectory(),
 ): PathClassification {
-  const candidates = pathCandidates(value, cwd, pathRules, sessionPathGrants, home);
+  const candidates = pathCandidates(
+    value,
+    cwd,
+    pathRules,
+    sessionPathGrants,
+    home,
+  );
   const grants = [...sessionPathGrants];
   const matches = candidates.map((candidate) => ({
     candidate,
@@ -195,11 +213,20 @@ export function checkPathAgainstRules(
   return {
     status: "unknown",
     candidates,
-    displayPath: candidates[0] || normalize(resolve(cwd, expandHome(value, home))),
+    displayPath:
+      candidates[0] || normalize(resolve(cwd, expandHome(value, home))),
   };
 }
 
-function commandGrant(grants: Iterable<string>, command: string): string | undefined {
+function commandGrant(
+  grants: Iterable<string>,
+  command: string,
+  commandArgv: readonly string[][],
+): string | undefined {
+  // A command grant authorizes one parsed command invocation, not an entire
+  // shell program. In particular, never let a grant for `tool *` authorize
+  // `tool input; other-command` through a raw string prefix match.
+  if (commandArgv.length !== 1) return undefined;
   for (const pattern of grants) {
     const prefix = pattern.endsWith("*") ? pattern.slice(0, -1) : pattern;
     if (command === prefix || command.startsWith(prefix)) return pattern;
@@ -231,7 +258,8 @@ export function classifyCommand(options: {
       command,
       kind: "deny",
       statements: [],
-      reason: "Blocked: shell command cannot be statically analyzed because it references a sensitive path",
+      reason:
+        "Blocked: shell command cannot be statically analyzed because it references a sensitive path",
     };
   }
 
@@ -246,7 +274,9 @@ export function classifyCommand(options: {
     };
   }
 
-  const interpreter = analysis.heads.find((head) => opaqueShellCommands.has(head));
+  const interpreter = analysis.heads.find((head) =>
+    opaqueShellCommands.has(head),
+  );
   if (interpreter) {
     return {
       command,
@@ -276,7 +306,11 @@ export function classifyCommand(options: {
     };
   }
 
-  const grant = commandGrant(options.sessionBashGrants ?? [], command);
+  const grant = commandGrant(
+    options.sessionBashGrants ?? [],
+    command,
+    analysis.commandArgv,
+  );
   if (grant) {
     return {
       command,
@@ -343,7 +377,10 @@ export function evaluateAllowlist(options: {
       command: classification.command,
     };
   }
-  if (classification.kind === "opaque" || classification.kind === "interpreter") {
+  if (
+    classification.kind === "opaque" ||
+    classification.kind === "interpreter"
+  ) {
     return {
       verdict: "needs-confirmation",
       reason: classification.reason ?? "Shell syntax requires approval",
