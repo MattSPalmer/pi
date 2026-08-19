@@ -41,9 +41,18 @@ export const projectPolicyFiles = (cwd: string, home: string): string[] => {
   // The packaged policy ships with the immutable configuration; fall back to
   // the writable agent directory for unpackaged installations.
   const configDir = process.env.PI_CONFIG_DIR;
-  const globalDefaults = configDir
+  const packagedDefaults = configDir
     ? join(configDir, "permissions.defaults.json")
-    : join(home, ".pi", "agent", "permissions.defaults.json");
+    : undefined;
+  const userDefaults = join(home, ".pi", "agent", "permissions.defaults.json");
+  // PI_CONFIG_DIR is also commonly pointed at a writable project directory
+  // (for example when running a checkout during development). Do not let that
+  // hide the installed defaults merely because that directory has no packaged
+  // permissions file; otherwise even built-in commands such as `pwd` become
+  // "unrecognized".
+  const globalDefaults = packagedDefaults && existsSync(packagedDefaults)
+    ? packagedDefaults
+    : userDefaults;
   const globalOverrides = join(home, ".pi", "agent", "permissions.json");
   if (existsSync(globalDefaults)) files.push(globalDefaults);
   if (existsSync(globalOverrides)) files.push(globalOverrides);

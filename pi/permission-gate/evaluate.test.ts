@@ -116,6 +116,20 @@ test("sensitive path boundaries do not overmatch", () => {
   expect(checkPathAgainstRules(join(home, ".sshx", "id_rsa"), cwd, rules.paths).status).toBe("unknown");
 });
 
+test("falls back to user defaults when an override config dir has no defaults", () => {
+  const configDir = join(root, "empty-config");
+  mkdirSync(configDir, { recursive: true });
+  const previousConfig = process.env.PI_CONFIG_DIR;
+  process.env.PI_CONFIG_DIR = configDir;
+  try {
+    const active = loadPolicyRules(cwd, home);
+    expect(evaluateAllowlist({ command: "sort", cwd, rules: active }).verdict).toBe("allow");
+  } finally {
+    if (previousConfig === undefined) delete process.env.PI_CONFIG_DIR;
+    else process.env.PI_CONFIG_DIR = previousConfig;
+  }
+});
+
 test("delegated-agent policy is applied as the highest-precedence layer", () => {
   const configDir = join(root, "agent-config");
   mkdirSync(join(configDir, "permissions"), { recursive: true });
