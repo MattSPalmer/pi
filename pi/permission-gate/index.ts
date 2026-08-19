@@ -73,12 +73,16 @@ const commandAnnotations = (
       problems.push("opaque command syntax");
     if (classification.rule?.glob)
       problems.push(`arg pattern: ${classification.rule.glob}`);
-    for (const path of [
+    const argv = analysis?.commandArgv?.[index] ?? [];
+    const paths = new Set([
       ...(analysis?.paths ?? []),
       ...(analysis?.redirects ?? []),
-    ]) {
-      if (analysis?.commands?.[index]?.includes(path))
-        problems.push(`path: ${path}`);
+    ]);
+    for (const path of paths) {
+      const looksLikePath =
+        /^(?:~(?:\/|$)|\/(?:\/|$)|\.\.?(?:\/|$))/.test(path) ||
+        path.includes("/");
+      if (looksLikePath && argv.includes(path)) problems.push(`path: ${path}`);
     }
     return { statement, problems };
   });

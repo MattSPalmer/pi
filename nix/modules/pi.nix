@@ -30,6 +30,9 @@ let
   );
   basePermissions = builtins.fromJSON (builtins.readFile ../../permissions.json);
   enabledAltPreferences = pkgs.lib.filterAttrs (_: alt: alt.enable or false) altPreferences;
+  enabledExtensions = pkgs.lib.attrNames (
+    pkgs.lib.filterAttrs (_: extension: extension.enable or false) piExtensions
+  );
   altRules = builtins.concatLists (
     pkgs.lib.mapAttrsToList (
       _: alt:
@@ -66,9 +69,9 @@ let
         case "$name" in
           *.patch|*.test.ts) ;;
           *)
-            if ${if piExtensions.${name}.enable or false then "true" else "false"}; then
-              ln -s "$extension" "$out/agent/extensions/$name"
-            fi
+            case " ${builtins.concatStringsSep " " enabledExtensions} " in
+              *" $name "*) ln -s "$extension" "$out/agent/extensions/$name" ;;
+            esac
             ;;
         esac
       done
