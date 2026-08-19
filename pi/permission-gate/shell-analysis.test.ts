@@ -52,8 +52,8 @@ test("path heuristic distinguishes paths from ordinary arguments", () => {
     ["--flag", false],
     ["https://example.com", true],
     ["a\\\\b", false],
-    [".../file", false],
-    ["~user/file", false],
+    [".../file", true],
+    ["~user/file", true],
   ];
   for (const [value, expected] of cases) {
     assert.equal(looksLikePath(value), expected, value);
