@@ -14,7 +14,10 @@ const pathBearingCommands = new Set([
   "mkdir", "mv", "open", "readlink", "realpath", "rm", "rmdir", "stat",
   "tail", "touch", "wc",
 ]);
-const pathLike = (value: string) => /^(?:~(?:\/|$)|\/(?:\/|$)|\.\.?(?:\/|$))/.test(value) || value.includes("/");
+export const looksLikePath = (value: string): boolean =>
+  /^(?:~(?:\/|$)|\/(?:\/|$)|\.\.?(?:\/|$))/.test(value) || value.includes("/");
+
+const pathLike = looksLikePath;
 const unique = (values: string[]) => [...new Set(values)];
 export const defaultRustAnalyzer = "tree-sitter-bash-analyzer";
 export const rustAnalyzer = (): string =>

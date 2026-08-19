@@ -10,7 +10,7 @@ import {
 } from "./audit";
 import { askBash, type StatementAnnotation } from "./prompts";
 import { activateProjectRules } from "./policy";
-import { rustAnalyzer } from "./shell-analysis";
+import { looksLikePath, rustAnalyzer } from "./shell-analysis";
 import {
   canonicalPath,
   checkPathAgainstRules,
@@ -71,8 +71,7 @@ const commandAnnotations = (classification: any): StatementAnnotation[] | undefi
       ...(analysis?.redirects ?? []),
     ]);
     for (const path of paths) {
-      const looksLikePath = /^(?:~(?:\/|$)|\/(?:\/|$)|\.\.?(?:\/|$))/.test(path) || path.includes("/");
-      if (looksLikePath && argv.includes(path)) problems.push(`path: ${path}`);
+      if (looksLikePath(path) && argv.includes(path)) problems.push(`path: ${path}`);
     }
     return { statement, problems };
   });

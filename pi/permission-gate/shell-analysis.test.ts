@@ -17,7 +17,7 @@ esac
 chmodSync(analyzerPath, 0o755);
 const previousAnalyzer = process.env.PI_PERMISSION_ANALYZER;
 process.env.PI_PERMISSION_ANALYZER = analyzerPath;
-const { analyzeWithRust, tokenizeSimpleShell } = await import("./shell-analysis");
+const { analyzeWithRust, looksLikePath, tokenizeSimpleShell } = await import("./shell-analysis");
 after(() => {
   if (previousAnalyzer === undefined) delete process.env.PI_PERMISSION_ANALYZER;
   else process.env.PI_PERMISSION_ANALYZER = previousAnalyzer;
@@ -34,6 +34,29 @@ test("fallback tokenizer rejects opaque interpreters", () => {
   for (const interpreter of ["sh", "bash", "python3", "node", "xargs"]) {
     const result = tokenizeSimpleShell(`${interpreter} -c 'echo unsafe'`);
     assert.equal(result.safe, false, `${interpreter} must be opaque`);
+  }
+});
+
+test("path heuristic distinguishes paths from ordinary arguments", () => {
+  const cases: Array<[string, boolean]> = [
+    ["/", true],
+    ["/tmp/file", true],
+    ["~/config", true],
+    ["~", true],
+    ["./file", true],
+    ["../file", true],
+    ["..", true],
+    ["a/b", true],
+    ["README.md", false],
+    ["word", false],
+    ["--flag", false],
+    ["https://example.com", true],
+    ["a\\\\b", false],
+    [".../file", false],
+    ["~user/file", false],
+  ];
+  for (const [value, expected] of cases) {
+    assert.equal(looksLikePath(value), expected, value);
   }
 });
 
