@@ -298,15 +298,17 @@ export default function (pi: ExtensionAPI) {
         classification.statements,
       );
     if (classification.kind === "unrecognized") {
-      return analysis.paths.length
-        ? undefined
-        : askBash(
-            ctx,
-            "unrecognized shell command",
-            command,
-            event.toolName,
-            analysis.commands,
-          );
+      // Path arguments are checked above, but passing the path gate must not
+      // make an otherwise unknown command executable. Unknown commands may
+      // have side effects that the static path analysis cannot observe (for
+      // example, `direnv allow .` writes direnv's trust marker elsewhere).
+      return askBash(
+        ctx,
+        "unrecognized shell command",
+        command,
+        event.toolName,
+        analysis.commands,
+      );
     }
         return undefined;
       })();

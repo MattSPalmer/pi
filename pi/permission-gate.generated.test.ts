@@ -342,17 +342,29 @@ if (GATE_SOURCE_PATH) {
     assert.equal(result, undefined);
   });
 
+  test("generated gate: unknown path-bearing commands still require approval", async () => {
+    const { handlers } = await loadGate();
+    await handlers.session_start!({}, makeCtx("/work/project"));
+    const result = await handlers.tool_call!(
+      {
+        toolName: "bash",
+        input: { command: "direnv allow . && ./bin/domain-context nix-system" },
+      },
+      makeCtx("/work/project", { hasUI: false }),
+    );
+    assert.ok(result && (result as any).block);
+    assert.match((result as any).reason, /Needs approval/);
+  });
+
   test("generated gate: single-quoted shell text does not prevent command splitting", async () => {
     const { handlers } = await loadGate();
     await handlers.session_start!({}, makeCtx("/work/project"));
-    const ui = fakeUi([() => "Yes"]);
-    const command = `jj diff -- scripts/jj-run; jj diff --git scripts/jj-run; jj status --quiet; printf '\\n.gitignore files:\\n'; fd -u -H -t f -d 3 'gitignore|exclude' . -x sh -c 'echo --- $0; head -100 "$0"'`;
+    const command = `jj diff -- scripts/jj-run; jj diff --git scripts/jj-run; jj status --quiet; printf '\\n.gitignore files: $0\\n'; rg -n 'gitignore|exclude$' .`;
     const result = await handlers.tool_call!(
       { toolName: "bash", input: { command } },
-      makeCtx("/work/project", { select: ui.select }),
+      makeCtx("/work/project", { hasUI: false }),
     );
     assert.equal(result, undefined);
-    assert.equal(ui.prompts.length, 0, "literal $ inside single quotes must not make the compound command opaque");
   });
 
   test("generated gate: redirect targets inherit path policy", async () => {
