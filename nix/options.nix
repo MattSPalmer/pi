@@ -1,5 +1,28 @@
 { lib, ... }:
 {
+  options.piExtensions = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      options.enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Whether to package this Pi extension.";
+      };
+    });
+    default = {
+      permission-gate.enable = true;
+      propose-permission.enable = true;
+      elements.enable = true;
+      subagent.enable = true;
+      committing-mode.enable = true;
+      cost-status.enable = true;
+      export-response.enable = true;
+      sesseract.enable = true;
+      kagi-search.enable = false;
+      response-pipe.enable = false;
+    };
+    description = "Pi extensions to package and load.";
+  };
+
   options.altPreferences = lib.mkOption {
     type = lib.types.attrsOf (
       lib.types.submodule {

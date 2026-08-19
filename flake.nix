@@ -29,6 +29,7 @@
           grep = mkAlt [ "grep" "grep *" ] "rg" [ pkgs.ripgrep ];
         };
         moduleOptions = import ./nix/options.nix { inherit (nixpkgs) lib; };
+        piExtensions = moduleOptions.options.piExtensions.default;
         modules = [
           ./nix/modules/pi.nix
           ./nix/modules/analyzer.nix
@@ -43,7 +44,7 @@
           models:
           let
             moduleArgs = {
-              inherit pkgs altPreferences models;
+              inherit pkgs altPreferences models piExtensions;
               packages = result.packages;
             };
             result =
