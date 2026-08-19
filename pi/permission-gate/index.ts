@@ -72,8 +72,9 @@ const choosePath = async (
   // prevents an existing path (including one reached through a
   // symlink) from escaping the policy root. With no matching policy
   // root, an interactive approval may still establish a new scope.
-  const policyRoots = pathGrantRoots(pathRules, home).filter((root) =>
-    normalizedValue === root || normalizedValue.startsWith(root + "/"),
+  const policyRoots = pathGrantRoots(pathRules, home).filter(
+    (root) =>
+      normalizedValue === root || normalizedValue.startsWith(root + "/"),
   );
   const rootsToCheck = policyRoots.length ? policyRoots : [undefined];
   let validPath = false;
@@ -190,10 +191,11 @@ const checkPath = async (
       reason: "Requested value cannot be granted as a filesystem path",
     };
   }
-  const choice = await ctx.ui.select(
-    `Allow access to folder?\n\n  ${folder}`,
-    ["Once", "For this session", "No"],
-  );
+  const choice = await ctx.ui.select(`Allow access to folder?\n\n  ${folder}`, [
+    "Once",
+    "For this session",
+    "No",
+  ]);
   markPrompt(
     ctx,
     `path approval (${folder})`,
@@ -215,7 +217,11 @@ const checkPath = async (
 
 export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
-    ({ bash: bashRules, paths: pathRules } = activateProjectRules(ctx.cwd, rules, home));
+    ({ bash: bashRules, paths: pathRules } = activateProjectRules(
+      ctx.cwd,
+      rules,
+      home,
+    ));
     // Restore grants so they survive a reload or a later process
     // handling the same session, not just the current turn.
     restoreSessionGrants(ctx);
@@ -225,7 +231,8 @@ export default function (pi: ExtensionAPI) {
   });
   const pathTools = ["read", "edit", "write", "ls", "grep", "find"];
   pi.on("tool_call", async (event, ctx) => {
-    const shouldAudit = pathTools.includes(event.toolName) || event.toolName === "bash";
+    const shouldAudit =
+      pathTools.includes(event.toolName) || event.toolName === "bash";
     const state: AuditState = { prompted: false, promptCount: 0 };
     if (shouldAudit) auditStates.set(ctx, state);
     let result: any;
@@ -235,86 +242,94 @@ export default function (pi: ExtensionAPI) {
         // same turn. Refresh here so approval takes effect immediately.
         restoreSessionGrants(ctx);
         if (pathTools.includes(event.toolName)) {
-      const value = String(
-        event.input.path ?? event.input.root ?? event.input.directory ?? "",
-      );
-      return checkPath(ctx, value, pi, event.toolName);
-    }
-    if (event.toolName !== "bash") return undefined;
-    const classification = classifyCommand({
-      command: String(event.input.command ?? ""),
-      cwd: ctx.cwd,
-      bashRules,
-      sessionBashGrants,
-    });
-    const command = classification.command;
-    event.input.command = command;
-    if (classification.kind === "deny")
-      return { block: true, reason: classification.reason };
-    if (classification.kind === "opaque") {
-      // Opaque syntax cannot be checked against path rules, but it is
-      // still useful for an interactive user to approve a single
-      // invocation. Do not persist this decision: the next opaque
-      // command must be reviewed independently.
-      return askBash(
-        ctx,
-        `opaque shell syntax (${classification.reason})`,
-        command,
-        event.toolName,
-      );
-    }
-    if (classification.kind === "interpreter")
-      return askBash(
-        ctx,
-        `opaque interpreter (${classification.interpreter})`,
-        command,
-        event.toolName,
-        classification.statements,
-      );
-    // The remaining classifications all have a safe static analysis.
-    if (!classification.analysis) return undefined;
-    const analysis = classification.analysis;
+          const value = String(
+            event.input.path ?? event.input.root ?? event.input.directory ?? "",
+          );
+          return checkPath(ctx, value, pi, event.toolName);
+        }
+        if (event.toolName !== "bash") return undefined;
+        const classification = classifyCommand({
+          command: String(event.input.command ?? ""),
+          cwd: ctx.cwd,
+          bashRules,
+          sessionBashGrants,
+        });
+        const command = classification.command;
+        event.input.command = command;
+        if (classification.kind === "deny")
+          return { block: true, reason: classification.reason };
+        if (classification.kind === "opaque") {
+          // Opaque syntax cannot be checked against path rules, but it is
+          // still useful for an interactive user to approve a single
+          // invocation. Do not persist this decision: the next opaque
+          // command must be reviewed independently.
+          return askBash(
+            ctx,
+            `opaque shell syntax (${classification.reason})`,
+            command,
+            event.toolName,
+          );
+        }
+        if (classification.kind === "interpreter")
+          return askBash(
+            ctx,
+            `opaque interpreter (${classification.interpreter})`,
+            command,
+            event.toolName,
+            classification.statements,
+          );
+        // The remaining classifications all have a safe static analysis.
+        if (!classification.analysis) return undefined;
+        const analysis = classification.analysis;
 
-    // Inspect explicit filesystem arguments and redirect targets even
-    // when a command-level rule says allow. This prevents `ls ~/.ssh`,
-    // `rg /secret`, or `jj log > ~/.ssh/x` from bypassing the same
-    // path policy used by direct path tools.
-    for (const path of [...analysis.paths, ...analysis.redirects]) {
-      const result = await checkPath(ctx, path, pi, event.toolName);
-      if (result) return result;
-    }
+        // Inspect explicit filesystem arguments and redirect targets even
+        // when a command-level rule says allow. This prevents `ls ~/.ssh`,
+        // `rg /secret`, or `jj log > ~/.ssh/x` from bypassing the same
+        // path policy used by direct path tools.
+        for (const path of [...analysis.paths, ...analysis.redirects]) {
+          const result = await checkPath(ctx, path, pi, event.toolName);
+          if (result) return result;
+        }
 
-    // Proposals are exact command grants. They reduce repeated
-    // prompts without turning shell syntax into a new policy glob.
-    // Check shell syntax and explicit paths first so a granted
-    // command prefix cannot smuggle in a pipe or other control syntax.
-    if (classification.kind === "grant") return undefined;
-    if (classification.kind === "ask")
-      return askBash(
-        ctx,
-        classification.rule?.glob ?? "permission rule",
-        command,
-        event.toolName,
-        classification.statements,
-      );
-    if (classification.kind === "unrecognized") {
-      return analysis.paths.length
-        ? undefined
-        : askBash(
+        // Proposals are exact command grants. They reduce repeated
+        // prompts without turning shell syntax into a new policy glob.
+        // Check shell syntax and explicit paths first so a granted
+        // command prefix cannot smuggle in a pipe or other control syntax.
+        if (classification.kind === "grant") return undefined;
+        if (classification.kind === "ask")
+          return askBash(
+            ctx,
+            classification.rule?.glob ?? "permission rule",
+            command,
+            event.toolName,
+            classification.statements,
+          );
+        if (classification.kind === "unrecognized") {
+          // Path arguments are checked above, but passing the path gate must not
+          // make an otherwise unknown command executable. Unknown commands may
+          // have side effects that the static path analysis cannot observe (for
+          // example, `direnv allow .` writes direnv's trust marker elsewhere).
+          return askBash(
             ctx,
             "unrecognized shell command",
             command,
             event.toolName,
             analysis.commands,
           );
-    }
+        }
         return undefined;
       })();
     } finally {
       if (shouldAudit) {
-        const request = event.toolName === "bash"
-          ? String(event.input.command ?? "").trim()
-          : String(event.input.path ?? event.input.root ?? event.input.directory ?? "");
+        const request =
+          event.toolName === "bash"
+            ? String(event.input.command ?? "").trim()
+            : String(
+                event.input.path ??
+                  event.input.root ??
+                  event.input.directory ??
+                  "",
+              );
         recordPermissionRequest(ctx, {
           audit_version: 1,
           event: "permission_evaluation",
