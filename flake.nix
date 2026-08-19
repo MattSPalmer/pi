@@ -42,15 +42,16 @@
         # them: the flake's own outputs use the registry defaults, while
         # consumers can build a configuration for their own model choices.
         mkResult =
-          models:
+          {
+            models ? { },
+            bashAlts ? altPreferences,
+            extensionOpts ? piExtensions,
+          }:
           let
             moduleArgs = {
-              inherit
-                pkgs
-                altPreferences
-                models
-                piExtensions
-                ;
+              inherit pkgs models;
+              altPreferences = bashAlts;
+              piExtensions = extensionOpts;
               packages = result.packages;
             };
             result =
@@ -107,7 +108,13 @@
               inherit (nixpkgs) lib;
               inherit models;
             };
-          mkPi = models: (mkResult models).packages.pi;
+          mkPi =
+            {
+              models ? { },
+              bashAlts ? altPreferences,
+              extensionOpts ? piExtensions,
+            }:
+            (mkResult { inherit models bashAlts extensionOpts; }).packages.pi;
         };
       }
     );
