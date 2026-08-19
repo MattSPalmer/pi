@@ -47,3 +47,12 @@ test("session grants are portable across the integration boundary", () => {
   }];
   expect(evaluate("formatter input", entries).verdict).toBe("allow");
 });
+
+test("session grants do not authorize appended shell commands", () => {
+  const entries = [{
+    type: "custom",
+    customType: "permission-gate-path-grant",
+    data: { command: "formatter *" },
+  }];
+  expect(evaluate("formatter input; rm -rf ./target", entries).verdict).toBe("needs-confirmation");
+});
