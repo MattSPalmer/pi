@@ -188,8 +188,18 @@ export default function (pi: ExtensionAPI) {
   let enabled = enabledByEnvironment();
   let task: Task | undefined;
 
+  // Event handlers may outlive the session that created their context (for
+  // example, when the user starts or switches sessions while the nested
+  // describer is running). Notifications are best-effort and must never turn
+  // that normal race into an extension error.
   const notify = (ctx: any, message: string, level: "info" | "warning" | "error" = "info") => {
-    if (ctx.hasUI) ctx.ui.notify(message, level);
+    if (!ctx.hasUI) return;
+    try {
+      ctx.ui.notify(message, level);
+    } catch (_) {
+      // The context is stale after a session replacement or reload. There is
+      // no current-session context available to this event, so skip quietly.
+    }
   };
 
   pi.registerCommand("committing-mode", {
