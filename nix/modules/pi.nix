@@ -55,28 +55,36 @@ let
     version = "1";
     dontUnpack = true;
     installPhase = ''
-      mkdir -p "$out/agent/extensions"
-      ln -s ${permissionsFile} "$out/agent/permissions.defaults.json"
-      # Subagent definitions and prompt templates are rendered from the shared
-      # registry: subagents carry name/model/tools frontmatter, prompts carry
-      # the argument hint.
-      ln -s ${agentFiles} "$out/agent/agents"
-      ln -s ${promptFiles} "$out/agent/prompts"
-      ln -s ${permissionFiles} "$out/agent/permissions"
-      for extension in ${../../pi}/*/; do
-        name=$(basename "$extension")
-        case "$name" in
-          *.patch|*.test.ts) ;;
-          *)
-            case " ${builtins.concatStringsSep " " enabledExtensions} " in
-              *" $name "*) ln -s "$extension" "$out/agent/extensions/$name" ;;
-            esac
-            ;;
-        esac
-      done
-      if ${if extensionOpts.subagent.enable or false then "true" else "false"}; then
-        ln -s ${subagentExtension} "$out/agent/extensions/subagent"
-      fi
+            mkdir -p "$out/agent/extensions"
+            ln -s ${permissionsFile} "$out/agent/permissions.defaults.json"
+            # Keep transcript navigation available without requiring users to edit
+            # the writable agent settings. In fullscreen mode this jumps to the
+            # beginning of the transcript (pi owns the scrolling implementation).
+            cat > "$out/agent/keybindings.json" <<'EOF'
+      {
+        "tui.altScreen.top": "ctrl+shift+home"
+      }
+      EOF
+            # Subagent definitions and prompt templates are rendered from the shared
+            # registry: subagents carry name/model/tools frontmatter, prompts carry
+            # the argument hint.
+            ln -s ${agentFiles} "$out/agent/agents"
+            ln -s ${promptFiles} "$out/agent/prompts"
+            ln -s ${permissionFiles} "$out/agent/permissions"
+            for extension in ${../../pi}/*/; do
+              name=$(basename "$extension")
+              case "$name" in
+                *.patch|*.test.ts) ;;
+                *)
+                  case " ${builtins.concatStringsSep " " enabledExtensions} " in
+                    *" $name "*) ln -s "$extension" "$out/agent/extensions/$name" ;;
+                  esac
+                  ;;
+              esac
+            done
+            if ${if extensionOpts.subagent.enable or false then "true" else "false"}; then
+              ln -s ${subagentExtension} "$out/agent/extensions/subagent"
+            fi
     '';
   };
   upstreamPi = pkgs.callPackage ../../pkgs/pi { };

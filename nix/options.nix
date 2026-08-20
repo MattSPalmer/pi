@@ -21,6 +21,7 @@
       sesseract.enable = true;
       kagi-search.enable = false;
       response-pipe.enable = false;
+      response-scroll.enable = true;
     };
     description = "Pi extensions to package and load.";
   };
