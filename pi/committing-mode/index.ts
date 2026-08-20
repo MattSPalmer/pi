@@ -47,6 +47,11 @@ export const targetWorkspace = (cwd: string) => {
   return configured ? (isAbsolute(configured) ? configured : resolve(cwd, configured)) : cwd;
 };
 
+// Snapshot once before a read phase. Read-only jj commands otherwise scan the
+// working copy and integrate operations, which is costly across many repos and
+// makes concurrent inspection contend on the operation log.
+const jjReadOptions = ["--ignore-working-copy", "--no-integrate-operation"];
+
 const run = (args: string[], cwd: string, input?: string): Promise<JjResult> =>
   new Promise((resolve) => {
     let stdout = "";
@@ -92,15 +97,16 @@ const run = (args: string[], cwd: string, input?: string): Promise<JjResult> =>
   });
 
 const workingCopy = async (cwd: string): Promise<WorkingCopy | null> => {
-  const root = await run(["root"], cwd);
-  if (root.code !== 0) return null;
+  // This is the one deliberate working-copy snapshot for the read phase.
+  const snapshot = await run(["status", "--quiet"], cwd);
+  if (snapshot.code !== 0) return null;
   // jj templates treat single-quoted strings as raw: '\n' appends a literal
   // backslash-n rather than a newline. Use double quotes so the separator is a
   // real newline and the parsed ids stay usable inside revsets.
   const [operation, changeId, diff] = await Promise.all([
-    run(["op", "log", "-n", "1", "-T", 'id ++ "\\n"', "--no-graph", "--no-pager"], cwd),
-    run(["log", "-r", "@", "-T", 'change_id ++ "\\n"', "--no-graph", "--no-pager"], cwd),
-    run(["diff", "--git", "--no-pager"], cwd),
+    run(["op", "log", ...jjReadOptions, "-n", "1", "-T", 'id ++ "\\n"', "--no-graph", "--no-pager"], cwd),
+    run(["log", ...jjReadOptions, "-r", "@", "-T", 'change_id ++ "\\n"', "--no-graph", "--no-pager"], cwd),
+    run(["diff", ...jjReadOptions, "--git", "--no-pager"], cwd),
   ]);
   if (operation.code !== 0 || changeId.code !== 0 || diff.code !== 0) return null;
   return { operationId: operation.stdout.trim(), changeId: changeId.stdout.trim(), diff: diff.stdout };
@@ -113,7 +119,7 @@ type ConsumerLister = (cwd: string) => Promise<JjResult>;
 type WorkspaceRootCheck = (path: string) => Promise<boolean>;
 
 const isWorkspaceRoot: WorkspaceRootCheck = async (path) => {
-  const repository = await run(["root"], path);
+  const repository = await run(["root", ...jjReadOptions], path);
   const root = repository.stdout.trim();
   return repository.code === 0 && root !== "" && resolve(root) === resolve(path);
 };
@@ -151,7 +157,7 @@ const runExternal = (program: string, args: string[], cwd: string): Promise<JjRe
 export const taskRangeRevset = (baselineChangeId: string) => `(${baselineChangeId}::@) & mutable()`;
 
 const taskChanges = async (baselineChangeId: string, cwd: string): Promise<string[] | null> => {
-  const result = await run(["log", "-r", taskRangeRevset(baselineChangeId), "-T", 'change_id ++ "\\n"', "--no-graph", "--no-pager"], cwd);
+  const result = await run(["log", ...jjReadOptions, "-r", taskRangeRevset(baselineChangeId), "-T", 'change_id ++ "\\n"', "--no-graph", "--no-pager"], cwd);
   if (result.code !== 0) return null;
   return result.stdout.split("\n").map((id) => id.trim()).filter(Boolean);
 };
@@ -239,11 +245,14 @@ export default function (pi: ExtensionAPI) {
     const snapshots = new Map<string, WorkingCopy>();
     const guarded = new Set<string>();
     const primary = targetWorkspace(ctx.cwd);
-    for (const workspace of workspaceList) {
+    // Workspaces are independent repositories. Snapshot/inspect them in
+    // parallel; workingCopy serializes each repository's snapshot with its
+    // concurrent read phase.
+    await Promise.all(workspaceList.map(async (workspace) => {
       let snapshot = await workingCopy(workspace);
       if (snapshot?.diff.trim() && resolve(workspace) !== resolve(primary)) {
         guarded.add(workspace);
-        continue;
+        return;
       }
       if (snapshot?.diff.trim()) {
         // Establish a clean task boundary before the model starts. jj snapshots
@@ -253,7 +262,7 @@ export default function (pi: ExtensionAPI) {
         if (separated.code === 0) snapshot = await workingCopy(workspace);
       }
       if (snapshot) snapshots.set(workspace, snapshot);
-    }
+    }));
     if (guarded.size) notify(ctx, `Leaving pre-existing work untouched in: ${[...guarded].join(", ")}`, "warning");
     task = { baseline: snapshots, workspaces: workspaceList, guarded, explicitNew: false, failed: false };
   });

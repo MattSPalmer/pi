@@ -123,8 +123,9 @@ The committing-mode extension supports automatic jj change boundaries after a
 successful task. It normally operates in Pi's current directory. Polyrepo
 consumers can select the workspace programmatically with
 `PI_COMMITTING_WORKSPACE` (absolute or relative to Pi's starting directory).
-The current integration targets one consumer per task; multi-consumer tasks
-should select a target explicitly or disable the mode.
+When running from a polyrepo root, it inspects all direct consumer workspaces in
+parallel. Pre-existing edits in non-target workspaces are left untouched;
+`PI_COMMITTING_WORKSPACE` can select the workspace that owns the current task.
 
 ### Cost status
 
