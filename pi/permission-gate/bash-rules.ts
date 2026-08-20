@@ -19,15 +19,14 @@ export const matchesBashRule = (rule: BashRule, argv: string[]) => {
   return argv.length === pattern.length;
 };
 
-export const normalizedCommandRule = (
-  rules: BashRule[],
-  argv: string[],
-) => {
-  const direct = rules.find((rule) => matchesBashRule(rule, argv));
-  if (direct?.action !== "ask" || argv[0] !== "jj") return direct;
+// Policy rules describe a jj subcommand, while jj permits global options both
+// before it and between `jj` and the subcommand. Canonicalize that argv shape
+// before *every* policy lookup; this must not depend on the action of a
+// coincidental raw-argv match.
+export const normalizeJjArgv = (argv: readonly string[]): string[] => {
+  if (argv[0] !== "jj") return [...argv];
   const normalized = [...argv];
   while (
-    normalized[0] === "jj" &&
     normalized.length > 1 &&
     /^(?:-R|--repository|--color)(?:=\S+)?$/.test(normalized[1])
   ) {
@@ -35,7 +34,18 @@ export const normalizedCommandRule = (
   }
   while (["--no-graph", "--quiet", "--no-pager"].includes(normalized[1]))
     normalized.splice(1, 1);
-  return rules.find((rule) => matchesBashRule(rule, normalized)) ?? direct;
+  return normalized;
+};
+
+export const normalizedCommandRule = (rules: BashRule[], argv: string[]) => {
+  const normalized = normalizeJjArgv(argv);
+  // Prefer an exact raw rule when one exists, so a policy can intentionally
+  // constrain a particular global-option spelling. Otherwise use the
+  // canonical jj invocation used by the categorized jj policy.
+  return (
+    rules.find((rule) => matchesBashRule(rule, argv)) ??
+    rules.find((rule) => matchesBashRule(rule, normalized))
+  );
 };
 
 export const deniedCommandRule = (
@@ -48,13 +58,17 @@ export const deniedCommandRule = (
   if (direct) return direct;
   // Defensive head-level fallback: deny `tool` and `tool *` even if an
   // analyzer supplies an unusual argv shape for a compound statement.
-  return commandArgv.map((argv) => {
-    const head = argv[0]?.split("/").pop() || argv[0];
-    return rules.find((rule) => {
-      const pattern = rule.glob.trim().split(/\s+/);
-      return rule.action === "deny" &&
-        ((pattern.length === 1 && pattern[0] === head) ||
-          (pattern.length === 2 && pattern[0] === head && pattern[1] === "*"));
-    });
-  }).find(Boolean);
+  return commandArgv
+    .map((argv) => {
+      const head = argv[0]?.split("/").pop() || argv[0];
+      return rules.find((rule) => {
+        const pattern = rule.glob.trim().split(/\s+/);
+        return (
+          rule.action === "deny" &&
+          ((pattern.length === 1 && pattern[0] === head) ||
+            (pattern.length === 2 && pattern[0] === head && pattern[1] === "*"))
+        );
+      });
+    })
+    .find(Boolean);
 };

@@ -407,6 +407,20 @@ mod tests {
     }
 
     #[test]
+    fn quoted_regex_pipe_remains_one_argument() {
+        let commands = commands(r#"rg -n 'one|two' file.ts"#);
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].argv, ["rg", "-n", "one|two", "file.ts"]);
+        assert_eq!(
+            commands[0].argv_metadata[2],
+            ArgumentMetadata {
+                shell_quoted: true,
+                shell_escaped: false
+            }
+        );
+    }
+
+    #[test]
     fn unquoted_and_double_quoted_expansions_remain_opaque() {
         for source in [r#"echo $HOME"#, r#"echo "$HOME""#, "echo `pwd`"] {
             assert!(
