@@ -62,7 +62,9 @@ in
       kagi-search.enable = false;
       response-pipe.enable = false;
       response-scroll.enable = true;
-      session-report.enable = true;
+      # TODO: Re-enable once Pi's Bun-compiled extension loader handles jiti's
+      # data: URLs without triggering NameTooLong during extension resolution.
+      session-report.enable = false;
     };
     description = "Pi extensions to package and load.";
   };
