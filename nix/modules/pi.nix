@@ -58,7 +58,7 @@ let
             # beginning of the transcript (pi owns the scrolling implementation).
             cat > "$out/agent/keybindings.json" <<'EOF'
       {
-        "tui.altScreen.top": "ctrl+shift+home"
+        "tui.altScreen.top": "shift+space"
       }
       EOF
             # Subagent definitions and prompt templates are rendered from the shared

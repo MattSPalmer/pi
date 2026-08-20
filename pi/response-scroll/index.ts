@@ -13,7 +13,10 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("response-top", {
     description: "Show the shortcut for scrolling the transcript to the top",
     handler: async (_args, ctx) => {
-      ctx.ui.notify("Press Ctrl+Shift+Home to scroll the transcript to the top (fullscreen mode).", "info");
+      ctx.ui.notify(
+        "Press Shift+Space to scroll the transcript to the top (fullscreen mode).",
+        "info",
+      );
     },
   });
 
@@ -22,14 +25,18 @@ export default function (pi: ExtensionAPI) {
     const content = event.message.content;
     const text = Array.isArray(content)
       ? content
-          .filter((part): part is { type: "text"; text: string } =>
-            !!part && typeof part === "object" && (part as { type?: string }).type === "text" && typeof (part as { text?: unknown }).text === "string",
+          .filter(
+            (part): part is { type: "text"; text: string } =>
+              !!part &&
+              typeof part === "object" &&
+              (part as { type?: string }).type === "text" &&
+              typeof (part as { text?: unknown }).text === "string",
           )
           .map((part) => part.text)
           .join("")
       : "";
     if (text.split("\n").length > 40) {
-      ctx.ui.setStatus("response-scroll", "Long response · Ctrl+Shift+Home: top");
+      ctx.ui.setStatus("response-scroll", "Long response · Shift+Space: top");
     } else {
       ctx.ui.setStatus("response-scroll", "");
     }
