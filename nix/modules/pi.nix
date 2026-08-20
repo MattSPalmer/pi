@@ -27,25 +27,21 @@ let
       path = pkgs.writeText "${name}-permissions.json" (builtins.toJSON agent.permissions);
     }) agents.agents
   );
+  permissionLib = import ../permissions.nix { inherit (pkgs) lib; };
   basePermissions = builtins.fromJSON (builtins.readFile ../../permissions.json);
-  enabledAltPreferences = pkgs.lib.filterAttrs (_: alt: alt.enable or false) bashAlts;
+  enabledAltPreferences = pkgs.lib.filterAttrs (_: alt: alt.enable) bashAlts;
   enabledExtensions = pkgs.lib.attrNames (
     pkgs.lib.filterAttrs (_: extension: extension.enable or false) extensionOpts
   );
-  altRules = builtins.concatLists (
-    pkgs.lib.mapAttrsToList (
-      _: alt:
-      map (command: {
-        inherit command;
-        context = alt.context;
-      }) alt.commands
-    ) enabledAltPreferences
+  permissions = permissionLib.render (
+    permissionLib.mergeAll (
+      [ basePermissions ]
+      ++ pkgs.lib.concatMap (alt: [
+        alt.permissions
+        (permissionLib.altFragment alt)
+      ]) (builtins.attrValues enabledAltPreferences)
+    )
   );
-  permissions = basePermissions // {
-    bash = basePermissions.bash // {
-      ALT = altRules;
-    };
-  };
   permissionsFile = pkgs.writeText "permissions.defaults.json" (builtins.toJSON permissions);
   altPackages = pkgs.lib.concatLists (
     pkgs.lib.mapAttrsToList (_: alt: alt.packages or [ ]) enabledAltPreferences

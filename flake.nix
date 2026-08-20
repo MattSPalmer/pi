@@ -19,16 +19,11 @@
           inherit system;
           config.allowUnfree = true;
         };
-        mkAlt = commands: replacement: packages: {
-          inherit commands packages;
-          enable = false;
-          context = "${builtins.head commands} use is precluded entirely by ${replacement} (`${replacement} --help` if you're unfamiliar).";
-        };
-        bashAlts = {
-          git = mkAlt [ "git" "git *" "*/git" "*/git *" ] "jj" [ pkgs.jujutsu ];
-          find = mkAlt [ "find" "find *" ] "fd" [ pkgs.fd ];
-          grep = mkAlt [ "grep" "grep *" ] "rg" [ pkgs.ripgrep ];
-        };
+        # Each alternative is one declarative unit: the displaced command,
+        # replacement package, and replacement permissions are activated
+        # together. Rich command policies (such as jj's) use the same shape as
+        # simple shell replacements rather than a parallel special case.
+        bashAlts = import ./nix/bash-alts.nix { inherit pkgs; };
         moduleOptions = import ./nix/options.nix { inherit (nixpkgs) lib; };
         extensionOpts = moduleOptions.options.extensionOpts.default;
         piModules = [

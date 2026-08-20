@@ -50,7 +50,17 @@ Shell analysis uses a tree-sitter parser rather than relying only on string patt
 
 Denied rules take precedence over ordinary matches. Session grants do not bypass explicit denials or command parsing. Delegated agents do not have an approval interface; an operation that requires approval is therefore denied when requested by a delegated agent.
 
-The configuration also wraps `fd` and rejects its `-x` and `-X` options. Those options can turn a file search into command execution, so the wrapper keeps the commonly used search interface separate from that execution capability.
+Command alternatives are packaged as declarative units: enabling one denies
+the displaced command, installs the replacement, and activates its permission
+fragment together. This covers simple replacements such as `find` → `fd` and
+`grep` → `rg`, while `git` → `jj` contributes the same kind of fragment with
+categorized Jujutsu subcommand permissions. The permission loader treats these
+as generic executable namespaces rather than embedding Jujutsu-specific logic.
+
+The configuration also rejects `fd`'s `-x`, `-X`, `--exec`, and `--exec-batch`
+options during static shell analysis. Those options can turn a file search into
+command execution, so ordinary `fd` searches can be read-allowed without
+implicitly granting execution.
 
 A companion permission-proposal extension allows an interactive agent to request a narrowly scoped grant. The operator can accept an exact command grant or a selected directory scope for the session. This provides a structured alternative to weakening the general policy.
 

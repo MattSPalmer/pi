@@ -31,6 +31,15 @@ writeFileSync(join(home, ".pi", "agent", "permissions.defaults.json"), JSON.stri
     allow: [`${cwd}/**`],
     deny: [`${home}/.ssh/**`],
   },
+  commands: {
+    jj: {
+      READ: ["status", "log"],
+      WRITE: ["describe"],
+    },
+    hg: {
+      READ: ["status"],
+    },
+  },
 }));
 
 process.env.PI_PERMISSION_ANALYZER = "tree-sitter-bash-analyzer";
@@ -51,6 +60,13 @@ test("classifies allow, deny, ask, and unrecognized commands", () => {
   expect(denied.reason).toContain("use jj instead");
   expect(classifyCommand({ command: "rm file", cwd, bashRules: rules.bash }).kind).toBe("ask");
   expect(classifyCommand({ command: "unknown-tool", cwd, bashRules: rules.bash }).kind).toBe("unrecognized");
+});
+
+test("namespaced command policies are executable-agnostic", () => {
+  expect(classifyCommand({ command: "jj status", cwd, bashRules: rules.bash }).kind).toBe("allow");
+  expect(classifyCommand({ command: "jj describe", cwd, bashRules: rules.bash }).kind).toBe("ask");
+  expect(classifyCommand({ command: "hg status", cwd, bashRules: rules.bash }).kind).toBe("allow");
+  expect(classifyCommand({ command: "hg commit", cwd, bashRules: rules.bash }).kind).toBe("unrecognized");
 });
 
 test("classifies opaque syntax and strips redundant working-directory prefixes", () => {

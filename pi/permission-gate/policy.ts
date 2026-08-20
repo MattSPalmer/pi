@@ -2,30 +2,52 @@ import { dirname, join, normalize } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 
 export type Action = "allow" | "ask" | "deny";
-export type Rule = { glob: string; action: Action; context?: string; source: string; tier: number; specificity: number };
-const escapeRegex = (value: string) => value.replace(/[|\\{}()[\]^$+*?.-]/g, "\\$&");
-const categories = ["DENY", "ALT", "READ", "WRITE", "NETWORK", "ADMIN"] as const;
+export type Rule = {
+  glob: string;
+  action: Action;
+  context?: string;
+  source: string;
+  tier: number;
+  specificity: number;
+};
+const escapeRegex = (value: string) =>
+  value.replace(/[|\\{}()[\]^$+*?.-]/g, "\\$&");
+const categories = [
+  "DENY",
+  "ALT",
+  "READ",
+  "WRITE",
+  "NETWORK",
+  "ADMIN",
+] as const;
 const categoryAction = (category: (typeof categories)[number]): Action =>
-  category === "DENY" || category === "ALT" ? "deny" : category === "READ" ? "allow" : "ask";
+  category === "DENY" || category === "ALT"
+    ? "deny"
+    : category === "READ"
+      ? "allow"
+      : "ask";
 const addCategorizedRules = (
   target: Record<string, { action: Action; context?: string }>,
   section: any,
-  prefix: string,
-  jj: boolean,
+  command?: string,
 ) => {
   if (!section || typeof section !== "object") return;
   for (const category of categories) {
     for (const item of section[category] ?? []) {
-      const value = typeof item === "string" ? item : item?.command ?? item?.externalShell ?? item?.path;
+      const value =
+        typeof item === "string" ? item : (item?.command ?? item?.path);
       if (typeof value !== "string") continue;
-      const suffix = jj && !item?.externalShell ? `${value}*` : value;
-      target[`${prefix}${suffix}`] = {
+      const glob = command ? `${command} ${value}*` : value;
+      target[glob] = {
         action: categoryAction(category),
         // ALT entries carry the safer replacement in `context`; preserve it
         // so the gate can explain why the command was blocked.
-        context: typeof item === "object" && item !== null && typeof item.context === "string"
-          ? item.context
-          : undefined,
+        context:
+          typeof item === "object" &&
+          item !== null &&
+          typeof item.context === "string"
+            ? item.context
+            : undefined,
       };
     }
   }
@@ -50,9 +72,10 @@ export const projectPolicyFiles = (cwd: string, home: string): string[] => {
   // hide the installed defaults merely because that directory has no packaged
   // permissions file; otherwise even built-in commands such as `pwd` become
   // "unrecognized".
-  const globalDefaults = packagedDefaults && existsSync(packagedDefaults)
-    ? packagedDefaults
-    : userDefaults;
+  const globalDefaults =
+    packagedDefaults && existsSync(packagedDefaults)
+      ? packagedDefaults
+      : userDefaults;
   const globalOverrides = join(home, ".pi", "agent", "permissions.json");
   if (existsSync(globalDefaults)) files.push(globalDefaults);
   if (existsSync(globalOverrides)) files.push(globalOverrides);
@@ -74,12 +97,17 @@ export const projectPolicyFiles = (cwd: string, home: string): string[] => {
   }
   return files;
 };
-export const projectRules = (cwd: string, axis: "bash" | "paths", home: string) => {
+export const projectRules = (
+  cwd: string,
+  axis: "bash" | "paths",
+  home: string,
+) => {
   const compiled: Rule[] = [];
   for (const [index, file] of projectPolicyFiles(cwd, home).entries()) {
     try {
       const policy = JSON.parse(readFileSync(file, "utf8")) as any;
-      const sourceRules: Record<string, { action: Action; context?: string }> = {};
+      const sourceRules: Record<string, { action: Action; context?: string }> =
+        {};
       if (axis === "bash") {
         if (
           policy.bash &&
@@ -93,7 +121,9 @@ export const projectRules = (cwd: string, axis: "bash" | "paths", home: string) 
             } else if (action && typeof action === "object") {
               const configured = (action as any).action;
               if (
-                (configured === "allow" || configured === "ask" || configured === "deny") &&
+                (configured === "allow" ||
+                  configured === "ask" ||
+                  configured === "deny") &&
                 ((action as any).context === undefined ||
                   typeof (action as any).context === "string")
               ) {
@@ -105,11 +135,33 @@ export const projectRules = (cwd: string, axis: "bash" | "paths", home: string) 
             }
           }
         }
-        addCategorizedRules(sourceRules, policy.bash, "", false);
-        // Jujutsu categories are also accepted in project policies.
-        addCategorizedRules(sourceRules, policy.jj, "jj ", true);
+        addCategorizedRules(sourceRules, policy.bash);
+        // Rich executable policies use the same category grammar as bash.
+        // `commands.jj.READ = ["status"]`, for example, compiles to
+        // `jj status*`; no executable receives special treatment here.
+        if (
+          policy.commands &&
+          typeof policy.commands === "object" &&
+          !Array.isArray(policy.commands)
+        ) {
+          for (const [command, section] of Object.entries(policy.commands)) {
+            addCategorizedRules(sourceRules, section, command);
+          }
+        }
+        // Preserve the former top-level namespace syntax for project policies.
+        // Packaged policy is rendered with `commands`, so new namespaces never
+        // require a loader change.
+        for (const [command, section] of Object.entries(policy)) {
+          if (
+            command === "bash" ||
+            command === "paths" ||
+            command === "commands"
+          )
+            continue;
+          addCategorizedRules(sourceRules, section, command);
+        }
       } else {
-        addCategorizedRules(sourceRules, policy.paths, "", false);
+        addCategorizedRules(sourceRules, policy.paths);
         for (const path of policy.paths?.allow ?? [])
           sourceRules[path] = { action: "allow" };
         for (const path of policy.paths?.deny ?? [])
@@ -142,14 +194,32 @@ export const projectRules = (cwd: string, axis: "bash" | "paths", home: string) 
   }
   return compiled;
 };
-export const activateProjectRules = (cwd: string, rules: { bash: Rule[]; paths: Rule[] }, home: string) => {
-  const projectBash = projectRules(cwd, "bash", home).map((r) => ({ ...r, re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s") }));
-  const projectPaths = projectRules(cwd, "paths", home).map((r) => ({ ...r, re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s") }));
-  const bash = [...projectBash, ...rules.bash.map((r) => ({ ...r, re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s") }))].sort(
-    (a, b) => b.tier - a.tier || b.specificity - a.specificity,
-  );
-  const paths = [...projectPaths, ...rules.paths.map((r) => ({ ...r, re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s") }))].sort(
-    (a, b) => b.tier - a.tier || b.specificity - a.specificity,
-  );
+export const activateProjectRules = (
+  cwd: string,
+  rules: { bash: Rule[]; paths: Rule[] },
+  home: string,
+) => {
+  const projectBash = projectRules(cwd, "bash", home).map((r) => ({
+    ...r,
+    re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s"),
+  }));
+  const projectPaths = projectRules(cwd, "paths", home).map((r) => ({
+    ...r,
+    re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s"),
+  }));
+  const bash = [
+    ...projectBash,
+    ...rules.bash.map((r) => ({
+      ...r,
+      re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s"),
+    })),
+  ].sort((a, b) => b.tier - a.tier || b.specificity - a.specificity);
+  const paths = [
+    ...projectPaths,
+    ...rules.paths.map((r) => ({
+      ...r,
+      re: new RegExp(r.source.replace(/^\^~/, "^" + escapeRegex(home)), "s"),
+    })),
+  ].sort((a, b) => b.tier - a.tier || b.specificity - a.specificity);
   return { bash, paths };
 };

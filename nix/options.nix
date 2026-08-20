@@ -1,10 +1,50 @@
 { lib, ... }:
+let
+  inherit (lib) mkOption types;
+  permissionCategories = [
+    "DENY"
+    "ALT"
+    "READ"
+    "WRITE"
+    "NETWORK"
+    "ADMIN"
+  ];
+  permissionSectionType = types.submodule {
+    options = lib.genAttrs permissionCategories (
+      _:
+      mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Command patterns in this permission category.";
+      }
+    );
+  };
+  permissionFragmentType = types.submodule {
+    options = {
+      bash = mkOption {
+        type = permissionSectionType;
+        default = { };
+        description = "Top-level shell command permissions contributed by this alternative.";
+      };
+      paths = mkOption {
+        type = permissionSectionType;
+        default = { };
+        description = "Path permissions contributed by this alternative.";
+      };
+      commands = mkOption {
+        type = types.attrsOf permissionSectionType;
+        default = { };
+        description = "Namespaced command permissions, keyed by executable name.";
+      };
+    };
+  };
+in
 {
-  options.extensionOpts = lib.mkOption {
-    type = lib.types.attrsOf (
-      lib.types.submodule {
-        options.enable = lib.mkOption {
-          type = lib.types.bool;
+  options.extensionOpts = mkOption {
+    type = types.attrsOf (
+      types.submodule {
+        options.enable = mkOption {
+          type = types.bool;
           default = true;
           description = "Whether to package this Pi extension.";
         };
@@ -26,37 +66,46 @@
     description = "Pi extensions to package and load.";
   };
 
-  options.bashAlts = lib.mkOption {
-    type = lib.types.attrsOf (
-      lib.types.submodule {
+  options.bashAlts = mkOption {
+    type = types.attrsOf (
+      types.submodule {
         options = {
-          enable = lib.mkOption {
-            type = lib.types.bool;
+          enable = mkOption {
+            type = types.bool;
             default = false;
-            description = "Whether to enforce this ALT preference and provide its replacement package.";
+            description = "Whether to replace the displaced command and activate its replacement policy.";
           };
-          commands = lib.mkOption {
-            type = lib.types.listOf lib.types.str;
-            description = "Commands that should be rejected in favor of this alternative.";
+          displace = mkOption {
+            type = types.nonEmptyListOf types.str;
+            description = "Command patterns rejected in favor of the replacement.";
           };
-          context = lib.mkOption {
-            type = lib.types.str;
-            description = "Explanation shown when an alternative command is requested.";
+          replacement = mkOption {
+            type = types.nonEmptyStr;
+            description = "Replacement command presented to the user.";
           };
-          packages = lib.mkOption {
-            type = lib.types.listOf lib.types.package;
+          context = mkOption {
+            type = types.nonEmptyStr;
+            description = "Explanation shown when a displaced command is requested.";
+          };
+          packages = mkOption {
+            type = types.listOf types.package;
             default = [ ];
-            description = "Packages made available by this alternative.";
+            description = "Packages that provide the replacement command and its helpers.";
+          };
+          permissions = mkOption {
+            type = permissionFragmentType;
+            default = { };
+            description = "Permissions activated with the replacement command.";
           };
         };
       }
     );
     default = { };
-    description = "Bash command alternatives, with optional packages implied by each alternative.";
+    description = "Declarative command replacements: deny the old command, install the replacement, and activate its policy as one unit.";
   };
 
-  options.devShellPackages = lib.mkOption {
-    type = lib.types.listOf lib.types.package;
+  options.devShellPackages = mkOption {
+    type = types.listOf types.package;
     default = [ ];
     description = "Packages contributed by modules to the default development shell.";
   };

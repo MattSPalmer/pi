@@ -30,6 +30,16 @@ const scope = process.env.PI_SUBAGENT_NAME || "";
 const rules = RULES[scope] || RULES[""];
 let bashRules = rules.bash;
 let pathRules = rules.paths;
+let initializedCwd: string | undefined;
+
+// `session_start` normally initializes the active policy, but a tool call can
+// arrive before that hook when an extension is loaded into an already-running
+// session (or during startup races). Apply the configured defaults lazily too.
+const initializeForCwd = (cwd: string) => {
+  if (initializedCwd === cwd) return;
+  ({ bash: bashRules, paths: pathRules } = activateProjectRules(cwd, rules, home));
+  initializedCwd = cwd;
+};
 
 const sessionPathGrants = new Set<string>();
 const sessionBashGrants = new Set<string>();
@@ -236,7 +246,7 @@ const checkPath = async (
 
 export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
-    ({ bash: bashRules, paths: pathRules } = activateProjectRules(ctx.cwd, rules, home));
+    initializeForCwd(ctx.cwd);
     // Restore grants so they survive a reload or a later process
     // handling the same session, not just the current turn.
     restoreSessionGrants(ctx);
@@ -252,6 +262,10 @@ export default function (pi: ExtensionAPI) {
     let result: any;
     try {
       result = await (async () => {
+        // Initialize lazily as well as from session_start. This covers the
+        // first tool call when the extension was loaded after that lifecycle
+        // event was emitted.
+        initializeForCwd(ctx.cwd);
         // A primary agent's proposal tool appends the entry during the
         // same turn. Refresh here so approval takes effect immediately.
         restoreSessionGrants(ctx);

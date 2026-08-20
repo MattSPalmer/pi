@@ -107,4 +107,11 @@ The evaluated defaults are also available as `lib.bashAlts` and
 `lib.extensionOpts`. Explicit `bashAlts` and `extensionOpts` arguments remain
 available when a consumer needs to replace those option values wholesale.
 
+Command alternatives are declarative policy units. Enabling one rejects the
+command it displaces, installs the replacement package, and activates the
+replacement's permissions together. Simple alternatives contribute Bash rules
+(`find` → `fd`, `grep` → `rg`); richer replacements use the same model with a
+namespaced command policy (`git` → `jj`, including its read/write/network/admin
+subcommands).
+
 Changes to packaged agents, extensions, permissions, or the analyzer are included automatically in the next Nix build. The Pi dependency itself is pinned in `pkgs/pi/default.nix` and should be updated together with its source and dependency hashes.

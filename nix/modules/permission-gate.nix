@@ -1,6 +1,18 @@
 { pkgs, packages, ... }:
 let
   analyzer = packages.tree-sitter-bash-analyzer;
+  permissionLib = import ../permissions.nix { inherit (pkgs) lib; };
+  basePermissions = builtins.fromJSON (builtins.readFile ../../permissions.json);
+  bashAlts = import ../bash-alts.nix { inherit pkgs; };
+  permissionDefaults = permissionLib.render (
+    permissionLib.mergeAll (
+      [ basePermissions ]
+      ++ pkgs.lib.concatMap (alt: [
+        alt.permissions
+        (permissionLib.altFragment alt)
+      ]) (builtins.attrValues bashAlts)
+    )
+  );
   check =
     pkgs.runCommand "permission-gate-test"
       {
@@ -8,7 +20,7 @@ let
           pkgs.bun
           analyzer
         ];
-        permissionDefaults = builtins.readFile ../../permissions.json;
+        permissionDefaults = builtins.toJSON permissionDefaults;
         passAsFile = [ "permissionDefaults" ];
       }
       ''

@@ -157,7 +157,7 @@ These restrictions are expressed both in the agent definitions and in the permis
 
 ## Project-local permissions
 
-A project can add `.pi/permissions.json` without changing the profile-wide configuration. It may contain direct command rules, path allows and denies, or categorized rules. `READ` allows by default; `WRITE`, `NETWORK`, and `ADMIN` require approval; `DENY` is a hard block; and `ALT` is a hard block used when a safer replacement command is prescribed (for example, `fd` instead of `find` or `rg` instead of `grep`). The categories work for Bash commands, paths, and Jujutsu commands. Direct Bash rules and the legacy `paths.allow`/`paths.deny` keys remain supported:
+A project can add `.pi/permissions.json` without changing the profile-wide configuration. It may contain direct command rules, path allows and denies, or categorized rules. `READ` allows by default; `WRITE`, `NETWORK`, and `ADMIN` require approval; `DENY` is a hard block; and `ALT` is a hard block used when a safer replacement command is prescribed (for example, `fd` instead of `find` or `rg` instead of `grep`). The categories work for Bash commands, paths, and any namespaced executable policy. Direct Bash rules, the former top-level `jj` namespace, and the legacy `paths.allow`/`paths.deny` keys remain supported:
 
 ```json
 {
@@ -173,14 +173,22 @@ A project can add `.pi/permissions.json` without changing the profile-wide confi
     "READ": ["rg *", "ls *"],
     "NETWORK": ["curl *"]
   },
-  "jj": {
-    "READ": ["status", "diff"],
-    "WRITE": ["commit"]
+  "commands": {
+    "jj": {
+      "READ": ["status", "diff"],
+      "WRITE": ["commit"]
+    }
   }
 }
 ```
 
 Rules from nearer project directories take precedence over rules from ancestors. A malformed policy is ignored with a diagnostic; it does not disable the global permission gate.
+
+The packaged alternatives use this same shape declaratively. Enabling an
+alternative activates its displaced-command denial, replacement package, and
+replacement policy as one unit. That keeps `fd` and `rg` permissions beside
+their alternatives while allowing `jj` to contribute its full categorized
+subcommand policy without hard-coding Jujutsu in the loader.
 
 ## Automation around Pi
 
