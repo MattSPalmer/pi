@@ -97,12 +97,14 @@ let
       --replace-fail 'const userDir = path.join(getAgentDir(), "agents");' \
       'const userDir = process.env.PI_CONFIG_DIR ? path.join(process.env.PI_CONFIG_DIR, "agents") : path.join(getAgentDir(), "agents");'
   '';
+  pythonWithPolars = pkgs.python3.withPackages (ps: [ ps.polars ]);
   piWrapper = pkgs.writeShellApplication {
     name = "pi";
     runtimeInputs = [
       pkgs.coreutils
       upstreamPi
       packages.tree-sitter-bash-analyzer
+      pythonWithPolars
     ]
     ++ altPackages;
     runtimeEnv.PI_CONFIG_DIR = "${piConfig}/agent";

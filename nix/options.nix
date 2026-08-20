@@ -62,6 +62,7 @@ in
       kagi-search.enable = false;
       response-pipe.enable = false;
       response-scroll.enable = true;
+      session-report.enable = true;
     };
     description = "Pi extensions to package and load.";
   };
