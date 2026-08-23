@@ -21,6 +21,7 @@
       sesseract.enable = true;
       mac-system-theme.enable = true;
       kagi-search.enable = false;
+      fetch-webpage.enable = true;
       response-pipe.enable = false;
     };
     description = "Pi extensions to package and load.";
