@@ -19,6 +19,7 @@
       cost-status.enable = true;
       export-response.enable = true;
       sesseract.enable = true;
+      mac-system-theme.enable = true;
       kagi-search.enable = false;
       response-pipe.enable = false;
     };
