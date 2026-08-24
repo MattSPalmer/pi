@@ -11,7 +11,14 @@
  * rather than failed, so this file can still be run standalone.
  */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -40,7 +47,10 @@ async function loadGate(): Promise<{ handlers: Handlers; entries: unknown[] }> {
   const handlers: Handlers = {};
   const entries: unknown[] = [];
   const pi = {
-    on: (name: string, handler: (event: unknown, ctx: any) => Promise<unknown>) => {
+    on: (
+      name: string,
+      handler: (event: unknown, ctx: any) => Promise<unknown>,
+    ) => {
       (handlers as any)[name] = handler;
     },
     appendEntry: (customType: string, data?: unknown) => {
@@ -55,7 +65,9 @@ function makeFixture() {
   // Canonicalize immediately: on macOS `tmpdir()` reports /var, but the gate
   // resolves existing paths via realpath (so it stores /private/var). Returning
   // the resolved root keeps later assertions on granted scope paths aligned.
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "permission-gate-fixture-")));
+  const root = realpathSync(
+    mkdtempSync(join(tmpdir(), "permission-gate-fixture-")),
+  );
   mkdirSync(join(root, "a", "b"), { recursive: true });
   writeFileSync(join(root, "secret"), "secret");
   writeFileSync(join(root, "x"), "x");
@@ -69,13 +81,21 @@ function makeFixture() {
 
 function makeCtx(
   cwd: string,
-  opts: { hasUI?: boolean; select?: (prompt: string, options: string[]) => Promise<string | undefined>; entries?: unknown[] } = {},
+  opts: {
+    hasUI?: boolean;
+    select?: (prompt: string, options: string[]) => Promise<string | undefined>;
+    entries?: unknown[];
+  } = {},
 ) {
   return {
     cwd,
     hasUI: opts.hasUI ?? true,
     ui: {
-      select: opts.select ?? (async () => { throw new Error("unexpected ui.select() call"); }),
+      select:
+        opts.select ??
+        (async () => {
+          throw new Error("unexpected ui.select() call");
+        }),
     },
     sessionManager: { getEntries: () => opts.entries ?? [] },
   };
@@ -84,21 +104,26 @@ function makeCtx(
 /** Queue of canned responses for ctx.ui.select(), keyed by call order. Also
  * records every prompt string it was called with, for assertions on rendered
  * text (e.g. the newline-escaping regression). */
-function fakeUi(fns: Array<(prompt: string, options: string[]) => string | undefined>) {
+function fakeUi(
+  fns: Array<(prompt: string, options: string[]) => string | undefined>,
+) {
   let i = 0;
   const prompts: string[] = [];
   const select = async (prompt: string, options: string[]) => {
     prompts.push(prompt);
     const fn = fns[i++];
-    if (!fn) throw new Error(`unexpected extra ui.select() call (prompt: ${prompt})`);
+    if (!fn)
+      throw new Error(`unexpected extra ui.select() call (prompt: ${prompt})`);
     return fn(prompt, options);
   };
   return { select, prompts };
 }
 
-test("generated gate: GATE_SOURCE_PATH available", { skip: !GATE_SOURCE_PATH }, () => {
-  assert.ok(GATE_SOURCE_PATH);
-});
+if (GATE_SOURCE_PATH) {
+  test("generated gate: GATE_SOURCE_PATH available", () => {
+    assert.ok(GATE_SOURCE_PATH);
+  });
+}
 
 if (GATE_SOURCE_PATH) {
   test("generated gate: every evaluated path call is recorded for audit metrics", async () => {
@@ -114,7 +139,10 @@ if (GATE_SOURCE_PATH) {
         makeCtx("/work/project"),
       );
       assert.equal(result, undefined);
-      const records = readFileSync(log, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+      const records = readFileSync(log, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
       const record = records.at(-1);
       assert.equal(record.audit_version, 1);
       assert.equal(record.event, "permission_evaluation");
@@ -131,8 +159,13 @@ if (GATE_SOURCE_PATH) {
   test("generated gate: root cwd trusts descendants (regression: isWithin('/', '/') bug)", async () => {
     const { handlers } = await loadGate();
     await handlers.session_start!({}, makeCtx("/"));
-    const select = async () => { throw new Error("should not prompt: '/' must grant every absolute path"); };
-    const result = await handlers.tool_call!({ toolName: "read", input: { path: "/etc/passwd" } }, makeCtx("/", { select }));
+    const select = async () => {
+      throw new Error("should not prompt: '/' must grant every absolute path");
+    };
+    const result = await handlers.tool_call!(
+      { toolName: "read", input: { path: "/etc/passwd" } },
+      makeCtx("/", { select }),
+    );
     assert.equal(result, undefined);
   });
 
@@ -165,8 +198,14 @@ if (GATE_SOURCE_PATH) {
     );
     assert.equal(result, undefined);
     const approvalPrompt = prompts[1];
-    assert.ok(approvalPrompt.includes("\n\n"), "approval prompt should contain a real blank line before the path");
-    assert.ok(!approvalPrompt.includes("\\n"), "approval prompt should not contain a literal backslash-n");
+    assert.ok(
+      approvalPrompt.includes("\n\n"),
+      "approval prompt should contain a real blank line before the path",
+    );
+    assert.ok(
+      !approvalPrompt.includes("\\n"),
+      "approval prompt should not contain a literal backslash-n",
+    );
   });
 
   test("generated gate: selecting a scope grants it for the session and covers siblings on the next call", async () => {
@@ -188,7 +227,11 @@ if (GATE_SOURCE_PATH) {
 
     const second = await handlers.tool_call!(
       { toolName: "read", input: { path: join(root, "a", "other.txt") } },
-      makeCtx("/work/project", { select: async () => { throw new Error("should not prompt again for a granted scope"); } }),
+      makeCtx("/work/project", {
+        select: async () => {
+          throw new Error("should not prompt again for a granted scope");
+        },
+      }),
     );
     assert.equal(second, undefined);
   });
@@ -210,7 +253,11 @@ if (GATE_SOURCE_PATH) {
       makeCtx("/work/project", { select }),
     );
     assert.ok(seenOptions[0].startsWith("Current scope (default) — "));
-    assert.ok(seenOptions.slice(1, -1).every((label) => label.startsWith("Broader scope — ")));
+    assert.ok(
+      seenOptions
+        .slice(1, -1)
+        .every((label) => label.startsWith("Broader scope — ")),
+    );
     assert.ok(seenOptions.at(-1)!.startsWith("Requested path only — "));
   });
 
@@ -218,35 +265,68 @@ if (GATE_SOURCE_PATH) {
     const { handlers } = await loadGate();
     await handlers.session_start!({}, makeCtx("/work/project"));
     const prompts: string[] = [];
-    const result = await handlers.tool_call!({
-      toolName: "bash",
-      input: { command: "sed -n '/^diff --git a\\/.circleci\\/config.yml/,/^diff --git a\\/(D|G|c)/p'" },
-    }, makeCtx("/work/project", {
-      select: async (prompt) => { prompts.push(prompt); return "Yes"; },
-    }));
-    assert.ok(result && (result as any).block, "range expression must not become a path grant");
-    assert.ok(prompts.every((prompt) => !prompt.includes("Choose access scope")), "non-path range must not open a path-scope prompt");
+    const result = await handlers.tool_call!(
+      {
+        toolName: "bash",
+        input: {
+          command:
+            "sed -n '/^diff --git a\\/.circleci\\/config.yml/,/^diff --git a\\/(D|G|c)/p'",
+        },
+      },
+      makeCtx("/work/project", {
+        select: async (prompt) => {
+          prompts.push(prompt);
+          return "Yes";
+        },
+      }),
+    );
+    assert.ok(
+      result && (result as any).block,
+      "range expression must not become a path grant",
+    );
+    assert.ok(
+      prompts.every((prompt) => !prompt.includes("Choose access scope")),
+      "non-path range must not open a path-scope prompt",
+    );
   });
 
   test("generated gate: oversized path is blocked before prompting (segment cap)", async () => {
     const { handlers } = await loadGate();
     await handlers.session_start!({}, makeCtx("/work/project"));
-    const longPath = "/" + Array.from({ length: 70 }, (_, i) => `seg${i}`).join("/");
-    const select = async () => { throw new Error("should not prompt for an oversized path"); };
+    const longPath =
+      "/" + Array.from({ length: 70 }, (_, i) => `seg${i}`).join("/");
+    const select = async () => {
+      throw new Error("should not prompt for an oversized path");
+    };
     const result = await handlers.tool_call!(
       { toolName: "read", input: { path: longPath } },
       makeCtx("/work/project", { select }),
     );
-    assert.ok(result && (result as any).block, "oversized path should be blocked");
+    assert.ok(
+      result && (result as any).block,
+      "oversized path should be blocked",
+    );
   });
 
   test("generated gate: persisted session-path-grant entries are restored on session_start", async () => {
     const { handlers } = await loadGate();
     await handlers.session_start!(
       {},
-      makeCtx("/work/project", { entries: [{ type: "custom", customType: "permission-gate-path-grant", data: { path: "/tmp/restored" } }] }),
+      makeCtx("/work/project", {
+        entries: [
+          {
+            type: "custom",
+            customType: "permission-gate-path-grant",
+            data: { path: "/tmp/restored" },
+          },
+        ],
+      }),
     );
-    const select = async () => { throw new Error("should not prompt: grant was restored from session entries"); };
+    const select = async () => {
+      throw new Error(
+        "should not prompt: grant was restored from session entries",
+      );
+    };
     const result = await handlers.tool_call!(
       { toolName: "read", input: { path: "/tmp/restored/file.txt" } },
       makeCtx("/work/project", { select }),
@@ -263,7 +343,10 @@ if (GATE_SOURCE_PATH) {
       { toolName: "read", input: { path: "/Users/someone/.ssh/id_ed25519" } },
       makeCtx("/work/project"),
     );
-    assert.ok(result && (result as any).block, "absolute .ssh path must be denied");
+    assert.ok(
+      result && (result as any).block,
+      "absolute .ssh path must be denied",
+    );
     assert.match((result as any).reason, /Blocked by permission rule/);
   });
 
@@ -278,10 +361,16 @@ if (GATE_SOURCE_PATH) {
     const { handlers } = await loadGate();
     await handlers.session_start!({}, makeCtx(project, { hasUI: false }));
     const result = await handlers.tool_call!(
-      { toolName: "read", input: { path: join(project, "link", "secret.txt") } },
+      {
+        toolName: "read",
+        input: { path: join(project, "link", "secret.txt") },
+      },
       makeCtx(project, { hasUI: false }),
     );
-    assert.ok(result && (result as any).block, "a symlinked path outside the project must not inherit startup trust");
+    assert.ok(
+      result && (result as any).block,
+      "a symlinked path outside the project must not inherit startup trust",
+    );
     assert.match((result as any).reason, /Needs approval/);
   });
 
@@ -289,10 +378,16 @@ if (GATE_SOURCE_PATH) {
     const { handlers } = await loadGate();
     await handlers.session_start!({}, makeCtx("/work/project"));
     const result = await handlers.tool_call!(
-      { toolName: "bash", input: { command: "ls /Users/someone/.ssh/id_ed25519" } },
+      {
+        toolName: "bash",
+        input: { command: "ls /Users/someone/.ssh/id_ed25519" },
+      },
       makeCtx("/work/project"),
     );
-    assert.ok(result && (result as any).block, "bash path must inherit the .ssh deny rule");
+    assert.ok(
+      result && (result as any).block,
+      "bash path must inherit the .ssh deny rule",
+    );
     assert.match((result as any).reason, /Blocked by permission rule/);
   });
 
@@ -300,11 +395,20 @@ if (GATE_SOURCE_PATH) {
     const { handlers } = await loadGate();
     await handlers.session_start!({}, makeCtx("/work/project"));
     const result = await handlers.tool_call!(
-      { toolName: "bash", input: { command: "jj status; cat /Users/someone/.ssh/id_ed25519" } },
+      {
+        toolName: "bash",
+        input: { command: "jj status; cat /Users/someone/.ssh/id_ed25519" },
+      },
       makeCtx("/work/project"),
     );
-    assert.ok(result && (result as any).block, "compound shell command must not inherit jj status allow");
-    assert.match((result as any).reason, /shell command cannot be statically analyzed/);
+    assert.ok(
+      result && (result as any).block,
+      "compound shell command must not inherit jj status allow",
+    );
+    assert.match(
+      (result as any).reason,
+      /shell command cannot be statically analyzed/,
+    );
   });
 
   test("generated gate: opaque interpreters are blocked without execution", async () => {
@@ -314,7 +418,10 @@ if (GATE_SOURCE_PATH) {
       { toolName: "bash", input: { command: "python3 -c 'print(1)'" } },
       makeCtx("/work/project", { hasUI: false }),
     );
-    assert.ok(result && (result as any).block, "interpreter command must require approval");
+    assert.ok(
+      result && (result as any).block,
+      "interpreter command must require approval",
+    );
     assert.match((result as any).reason, /opaque/);
   });
 
@@ -371,10 +478,16 @@ if (GATE_SOURCE_PATH) {
     const { handlers } = await loadGate();
     await handlers.session_start!({}, makeCtx("/work/project"));
     const result = await handlers.tool_call!(
-      { toolName: "bash", input: { command: "jj log > /Users/someone/.aws/creds" } },
+      {
+        toolName: "bash",
+        input: { command: "jj log > /Users/someone/.aws/creds" },
+      },
       makeCtx("/work/project", { hasUI: false }),
     );
-    assert.ok(result && (result as any).block, "redirect into a denied path must be blocked");
+    assert.ok(
+      result && (result as any).block,
+      "redirect into a denied path must be blocked",
+    );
     assert.match((result as any).reason, /Blocked by permission rule/);
   });
 
@@ -388,7 +501,8 @@ if (GATE_SOURCE_PATH) {
     );
     assert.equal(result, undefined);
     // If any prompt fired, it must not be the interpreter prompt.
-    for (const prompt of ui.prompts) assert.doesNotMatch(prompt, /opaque interpreter/);
+    for (const prompt of ui.prompts)
+      assert.doesNotMatch(prompt, /opaque interpreter/);
   });
 
   test("generated gate: project permissions layer by directory and override higher-level rules", async () => {
@@ -396,8 +510,16 @@ if (GATE_SOURCE_PATH) {
     const project = join(root, "project");
     mkdirSync(join(root, ".pi"));
     mkdirSync(join(project, ".pi"), { recursive: true });
-    writeFileSync(join(root, ".pi", "permissions.json"), JSON.stringify({ bash: { "gh pr *": "allow" } }));
-    writeFileSync(join(project, ".pi", "permissions.json"), JSON.stringify({ bash: { "gh pr list*": "deny", "gh pr checks*": "allow" } }));
+    writeFileSync(
+      join(root, ".pi", "permissions.json"),
+      JSON.stringify({ bash: { "gh pr *": "allow" } }),
+    );
+    writeFileSync(
+      join(project, ".pi", "permissions.json"),
+      JSON.stringify({
+        bash: { "gh pr list*": "deny", "gh pr checks*": "allow" },
+      }),
+    );
 
     const { handlers } = await loadGate();
     await handlers.session_start!({}, makeCtx(project, { hasUI: false }));
@@ -405,7 +527,10 @@ if (GATE_SOURCE_PATH) {
       { toolName: "bash", input: { command: "gh pr list" } },
       makeCtx(project, { hasUI: false }),
     );
-    assert.ok(denied && (denied as any).block, "nearest project rule should override a parent allow");
+    assert.ok(
+      denied && (denied as any).block,
+      "nearest project rule should override a parent allow",
+    );
     const allowed = await handlers.tool_call!(
       { toolName: "bash", input: { command: "gh pr checks" } },
       makeCtx(project, { hasUI: false }),
