@@ -119,13 +119,11 @@ function fakeUi(
   return { select, prompts };
 }
 
-test(
-  "generated gate: GATE_SOURCE_PATH available",
-  { skip: !GATE_SOURCE_PATH },
-  () => {
+if (GATE_SOURCE_PATH) {
+  test("generated gate: GATE_SOURCE_PATH available", () => {
     assert.ok(GATE_SOURCE_PATH);
-  },
-);
+  });
+}
 
 if (GATE_SOURCE_PATH) {
   test("generated gate: every evaluated path call is recorded for audit metrics", async () => {

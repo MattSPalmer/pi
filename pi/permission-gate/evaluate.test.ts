@@ -78,7 +78,13 @@ const {
   sessionGrantsFromEntries,
 } = await import("./evaluate.ts");
 
+// The test supplies its own defaults. Ignore the caller's packaged Pi config so
+// the fixture remains isolated when tests run inside `nix develop`.
+const previousConfigDir = process.env.PI_CONFIG_DIR;
+delete process.env.PI_CONFIG_DIR;
 const rules = loadPolicyRules(cwd, home);
+if (previousConfigDir === undefined) delete process.env.PI_CONFIG_DIR;
+else process.env.PI_CONFIG_DIR = previousConfigDir;
 
 test("classifies allow, deny, ask, and unrecognized commands", () => {
   expect(
