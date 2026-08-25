@@ -8,162 +8,298 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DynamicBorder } from "@earendil-works/pi-coding-agent";
 import {
-	Container,
-	Editor,
-	type EditorTheme,
-	Key,
-	matchesKey,
-	type SelectItem,
-	SelectList,
-	wrapTextWithAnsi,
+  Container,
+  Editor,
+  type EditorTheme,
+  Key,
+  matchesKey,
+  type SelectItem,
+  SelectList,
+  wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
 import { Type } from "typebox";
-import { type ElementSpec, isFailure, type Outcome, renderOutcome, renderSpec, type SelectOption } from "./spec.ts";
+import {
+  type ElementSpec,
+  isFailure,
+  type Outcome,
+  renderOutcome,
+  renderSpec,
+  type SelectOption,
+} from "./spec.ts";
 
 const OptionSchema = Type.Object({
-	label: Type.String({ description: "Display label" }),
-	description: Type.Optional(Type.String({ description: "Optional detail line" })),
+  label: Type.String({ description: "Display label" }),
+  description: Type.Optional(
+    Type.String({ description: "Optional detail line" }),
+  ),
 });
 
 const Params = Type.Object({
-	prompt: Type.String({ description: "What the user is being asked to choose" }),
-	options: Type.Array(OptionSchema, { minItems: 1, description: "Choices offered" }),
-	required: Type.Optional(
-		Type.Boolean({
-			description:
-				"If true (default), refusing to answer fails the call and the intended step must not proceed. If false, refusal is a normal outcome.",
-		}),
-	),
-	allow_other: Type.Optional(Type.Boolean({ description: "Offer a free-form answer. Default true." })),
+  prompt: Type.String({
+    description: "What the user is being asked to choose",
+  }),
+  options: Type.Array(OptionSchema, {
+    minItems: 1,
+    description: "Choices offered",
+  }),
+  ranking: Type.Optional(
+    Type.Boolean({
+      description:
+        "Allow selected choices to be ranked with h/l (default false).",
+    }),
+  ),
+  required: Type.Optional(
+    Type.Boolean({
+      description:
+        "If true (default), refusing to answer fails the call and the intended step must not proceed. If false, refusal is a normal outcome.",
+    }),
+  ),
+  allow_other: Type.Optional(
+    Type.Boolean({ description: "Offer a free-form answer. Default true." }),
+  ),
 });
 
 type Answer = { value: string; wasOther: boolean } | null;
+type RankedAnswer = { values: string[] } | null;
+
+async function showRankedSelect(
+  ctx: any,
+  spec: ElementSpec,
+): Promise<RankedAnswer> {
+  return await ctx.ui.custom<RankedAnswer>(
+    (tui: any, theme: any, _kb: any, done: (a: RankedAnswer) => void) => {
+      const selected: string[] = [];
+      let cursor = 0;
+      const render = (width: number) => {
+        const lines = [theme.fg("accent", theme.bold(spec.prompt)), ""];
+        for (const [i, option] of spec.options.entries()) {
+          const rank = selected.indexOf(option.label);
+          const marker = rank < 0 ? "[ ]" : `[${rank + 1}]`;
+          const text = `${i === cursor ? "❯" : " "} ${marker} ${option.label}`;
+          lines.push(i === cursor ? theme.fg("accent", text) : text);
+          if (option.description)
+            lines.push(`      ${theme.fg("muted", option.description)}`);
+        }
+        lines.push(
+          "",
+          theme.fg(
+            "dim",
+            "j/k select • space toggle • h/l rank • enter submit • esc cancel",
+          ),
+        );
+        return lines;
+      };
+      return {
+        render,
+        invalidate: () => {},
+        handleInput: (data: string) => {
+          if (matchesKey(data, Key.escape)) return done(null);
+          if (data === "j" || matchesKey(data, Key.down))
+            cursor = Math.min(spec.options.length - 1, cursor + 1);
+          else if (data === "k" || matchesKey(data, Key.up))
+            cursor = Math.max(0, cursor - 1);
+          else if (data === " ") {
+            const label = spec.options[cursor].label;
+            const index = selected.indexOf(label);
+            if (index < 0) selected.push(label);
+            else selected.splice(index, 1);
+          } else if (data === "h" || data === "l") {
+            const index = selected.indexOf(spec.options[cursor].label);
+            if (index >= 0) {
+              const next = data === "h" ? index + 1 : index - 1;
+              if (next >= 0 && next < selected.length)
+                [selected[index], selected[next]] = [
+                  selected[next],
+                  selected[index],
+                ];
+            }
+          } else if (matchesKey(data, Key.enter))
+            return done({ values: [...selected] });
+          tui.requestRender();
+        },
+      };
+    },
+    {
+      overlay: true,
+      overlayOptions: { width: "60%", minWidth: 40, anchor: "center" },
+    },
+  );
+}
 
 async function showSelect(ctx: any, spec: ElementSpec): Promise<Answer> {
-	const items: SelectItem[] = spec.options.map((o: SelectOption) => ({
-		value: o.label,
-		label: o.label,
-		description: o.description,
-	}));
-	if (spec.allowOther) items.push({ value: "\u0000other", label: "Type something…" });
+  const items: SelectItem[] = spec.options.map((o: SelectOption) => ({
+    value: o.label,
+    label: o.label,
+    description: o.description,
+  }));
+  if (spec.allowOther)
+    items.push({ value: "\u0000other", label: "Type something…" });
 
-	return await ctx.ui.custom<Answer>(
-		(tui: any, theme: any, _kb: any, done: (a: Answer) => void) => {
-			const container = new Container();
-			let editing = false;
+  return await ctx.ui.custom<Answer>(
+    (tui: any, theme: any, _kb: any, done: (a: Answer) => void) => {
+      const container = new Container();
+      let editing = false;
 
-			const editorTheme: EditorTheme = {
-				borderColor: (s: string) => theme.fg("accent", s),
-				selectList: {
-					selectedPrefix: (t: string) => theme.fg("accent", t),
-					selectedText: (t: string) => theme.fg("accent", t),
-					description: (t: string) => theme.fg("muted", t),
-					scrollInfo: (t: string) => theme.fg("dim", t),
-					noMatch: (t: string) => theme.fg("warning", t),
-				},
-			};
-			const editor = new Editor(tui, editorTheme);
-			editor.onSubmit = (value: string) => {
-				const trimmed = value.trim();
-				if (trimmed) done({ value: trimmed, wasOther: true });
-			};
+      const editorTheme: EditorTheme = {
+        borderColor: (s: string) => theme.fg("accent", s),
+        selectList: {
+          selectedPrefix: (t: string) => theme.fg("accent", t),
+          selectedText: (t: string) => theme.fg("accent", t),
+          description: (t: string) => theme.fg("muted", t),
+          scrollInfo: (t: string) => theme.fg("dim", t),
+          noMatch: (t: string) => theme.fg("warning", t),
+        },
+      };
+      const editor = new Editor(tui, editorTheme);
+      editor.onSubmit = (value: string) => {
+        const trimmed = value.trim();
+        if (trimmed) done({ value: trimmed, wasOther: true });
+      };
 
-			const list = new SelectList(items, Math.min(items.length, 10), editorTheme.selectList!);
-			list.onSelect = (item: SelectItem) => {
-				if (item.value === "\u0000other") {
-					editing = true;
-					rebuild();
-					return;
-				}
-				done({ value: item.value, wasOther: false });
-			};
-			list.onCancel = () => done(null);
+      const list = new SelectList(
+        items,
+        Math.min(items.length, 10),
+        editorTheme.selectList!,
+      );
+      list.onSelect = (item: SelectItem) => {
+        if (item.value === "\u0000other") {
+          editing = true;
+          rebuild();
+          return;
+        }
+        done({ value: item.value, wasOther: false });
+      };
+      list.onCancel = () => done(null);
 
-			// Text does not wrap long, styled strings. Keep the prompt as a component
-			// so it is reflowed whenever the overlay is resized.
-			const prompt = {
-				render: (width: number) => wrapTextWithAnsi(theme.fg("accent", theme.bold(spec.prompt)), Math.max(1, width - 4)),
-				invalidate: () => {},
-			};
-			let hintValue = "";
-			const hint = {
-				render: (width: number) => wrapTextWithAnsi(hintValue, Math.max(1, width - 4)),
-				invalidate: () => {},
-			};
+      // Text does not wrap long, styled strings. Keep the prompt as a component
+      // so it is reflowed whenever the overlay is resized.
+      const prompt = {
+        render: (width: number) =>
+          wrapTextWithAnsi(
+            theme.fg("accent", theme.bold(spec.prompt)),
+            Math.max(1, width - 4),
+          ),
+        invalidate: () => {},
+      };
+      let hintValue = "";
+      const hint = {
+        render: (width: number) =>
+          wrapTextWithAnsi(hintValue, Math.max(1, width - 4)),
+        invalidate: () => {},
+      };
 
-			function rebuild() {
-				container.clear?.();
-				container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
-				container.addChild(prompt as any);
-				container.addChild(editing ? editor : list);
-				hintValue = theme.fg(
-					"dim",
-					editing
-						? "enter submit • esc back"
-						: `↑↓ navigate • enter select • esc ${spec.required ? "refuse (fails call)" : "skip"}`,
-				);
-				container.addChild(hint);
-				container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
-				tui.requestRender();
-			}
-			rebuild();
+      function rebuild() {
+        container.clear?.();
+        container.addChild(
+          new DynamicBorder((s: string) => theme.fg("accent", s)),
+        );
+        container.addChild(prompt as any);
+        container.addChild(editing ? editor : list);
+        hintValue = theme.fg(
+          "dim",
+          editing
+            ? "enter submit • esc back"
+            : `↑↓ navigate • enter select • esc ${spec.required ? "refuse (fails call)" : "skip"}`,
+        );
+        container.addChild(hint);
+        container.addChild(
+          new DynamicBorder((s: string) => theme.fg("accent", s)),
+        );
+        tui.requestRender();
+      }
+      rebuild();
 
-			return {
-				render: (w: number) => container.render(w),
-				invalidate: () => container.invalidate(),
-				handleInput: (data: string) => {
-					if (editing) {
-						if (matchesKey(data, Key.escape)) {
-							editing = false;
-							editor.setText("");
-							rebuild();
-							return;
-						}
-						editor.handleInput(data);
-						tui.requestRender();
-						return;
-					}
-					list.handleInput(data);
-					tui.requestRender();
-				},
-			};
-		},
-		{ overlay: true, overlayOptions: { width: "60%", minWidth: 40, anchor: "center" } },
-	);
+      return {
+        render: (w: number) => container.render(w),
+        invalidate: () => container.invalidate(),
+        handleInput: (data: string) => {
+          if (editing) {
+            if (matchesKey(data, Key.escape)) {
+              editing = false;
+              editor.setText("");
+              rebuild();
+              return;
+            }
+            editor.handleInput(data);
+            tui.requestRender();
+            return;
+          }
+          list.handleInput(data);
+          tui.requestRender();
+        },
+      };
+    },
+    {
+      overlay: true,
+      overlayOptions: { width: "60%", minWidth: 40, anchor: "center" },
+    },
+  );
 }
 
 export default function elements(pi: ExtensionAPI) {
-	pi.registerTool({
-		name: "element",
-		label: "Element",
-		description:
-			"Offer the user a structured choice as an ephemeral UI element instead of asking in prose. Both the offer and the answer enter the transcript. Set required=false when you can proceed without an answer.",
-		promptSnippet: "element — ask the user to pick from options via an interactive selector",
-		parameters: Params,
-		executionMode: "sequential",
+  pi.registerTool({
+    name: "element",
+    label: "Element",
+    description:
+      "Offer the user a structured choice as an ephemeral UI element instead of asking in prose. Both the offer and the answer enter the transcript. Set required=false when you can proceed without an answer.",
+    promptSnippet:
+      "element — ask the user to pick from options via an interactive selector",
+    parameters: Params,
+    executionMode: "sequential",
 
-		async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, ctx: any) {
-			const spec: ElementSpec = {
-				kind: "select",
-				prompt: params.prompt,
-				options: params.options,
-				allowOther: params.allow_other ?? true,
-				required: params.required ?? true,
-			};
+    async execute(
+      _toolCallId: string,
+      params: any,
+      _signal: any,
+      _onUpdate: any,
+      ctx: any,
+    ) {
+      const spec: ElementSpec = {
+        kind: "select",
+        prompt: params.prompt,
+        options: params.options,
+        allowOther: params.allow_other ?? true,
+        required: params.required ?? true,
+      };
 
-			let outcome: Outcome;
-			if (ctx.mode !== "tui") {
-				outcome = { status: "unavailable", reason: "no interactive UI in this run mode" };
-			} else {
-				const answer = await showSelect(ctx, spec);
-				outcome = answer ? { status: "answered", ...answer } : { status: "refused" };
-			}
+      if (params.ranking) {
+        const ranked =
+          ctx.mode === "tui" ? await showRankedSelect(ctx, spec) : null;
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${renderSpec(spec)}\n\n${ranked ? `Ranked: ${ranked.values.join(", ")}` : "Not shown: no interactive UI in this run mode."}`,
+            },
+          ],
+          details: { spec, outcome: ranked },
+          isError: spec.required && !ranked,
+        };
+      }
 
-			return {
-				content: [{ type: "text", text: `${renderSpec(spec)}\n\n${renderOutcome(spec, outcome)}` }],
-				details: { spec, outcome },
-				isError: isFailure(spec, outcome),
-			};
-		},
-	});
+      let outcome: Outcome;
+      if (ctx.mode !== "tui") {
+        outcome = {
+          status: "unavailable",
+          reason: "no interactive UI in this run mode",
+        };
+      } else {
+        const answer = await showSelect(ctx, spec);
+        outcome = answer
+          ? { status: "answered", ...answer }
+          : { status: "refused" };
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `${renderSpec(spec)}\n\n${renderOutcome(spec, outcome)}`,
+          },
+        ],
+        details: { spec, outcome },
+        isError: isFailure(spec, outcome),
+      };
+    },
+  });
 }
