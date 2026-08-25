@@ -28,18 +28,35 @@ export default function (pi: ExtensionAPI) {
   let timer: ReturnType<typeof setInterval> | undefined;
   let activeTheme: "dark" | "light" | undefined;
 
-  pi.on("session_start", async (_event, ctx) => {
-    const apply = async () => {
-      const nextTheme = await systemTheme();
-      if (!nextTheme || nextTheme === activeTheme) return;
-      activeTheme = nextTheme;
-      if (ctx.hasUI) ctx.ui.setTheme(nextTheme);
-    };
+  // Never retain a context in the polling callback. Session replacement makes
+  // previously captured contexts stale (fork, switch, reload, and newSession).
+  // Polling only records the latest theme; a current event context applies it.
+  let pendingTheme: "dark" | "light" | undefined;
+  const apply = async (ctx: any) => {
+    const nextTheme = pendingTheme ?? (await systemTheme());
+    if (!nextTheme || nextTheme === activeTheme) return;
+    activeTheme = nextTheme;
+    if (ctx.hasUI) ctx.ui.setTheme(nextTheme);
+  };
 
-    await apply();
-    timer = setInterval(() => void apply(), POLL_INTERVAL_MS);
+  pi.on("session_start", async (_event, ctx) => {
+    // The new session may have a new UI even if the system theme is unchanged.
+    activeTheme = undefined;
+    pendingTheme = await systemTheme();
+    await apply(ctx);
+    if (timer) clearInterval(timer);
+    timer = setInterval(() => {
+      void systemTheme().then((theme) => {
+        pendingTheme = theme;
+      });
+    }, POLL_INTERVAL_MS);
     timer.unref?.();
   });
+
+  // These contexts are fresh even after a session replacement.
+  for (const event of ["turn_start", "agent_start"] as const) {
+    pi.on(event, async (_event, ctx) => apply(ctx));
+  }
 
   pi.on("session_shutdown", () => {
     if (timer) clearInterval(timer);
