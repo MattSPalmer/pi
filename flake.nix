@@ -102,6 +102,7 @@
             {
               models ? { },
               piPackage ? null,
+              ...
             }:
             (mkResult { inherit models piPackage; }).packages.pi;
         };
