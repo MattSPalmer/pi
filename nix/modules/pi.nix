@@ -3,6 +3,7 @@
   packages,
   altPreferences,
   models,
+  piPackage ? null,
   ...
 }:
 let
@@ -61,7 +62,11 @@ let
       ln -s ${subagentExtension} "$out/agent/extensions/subagent"
     '';
   };
-  upstreamPi = pkgs.callPackage ../../pkgs/pi { };
+  upstreamPi =
+    if piPackage != null then
+      piPackage
+    else
+      pkgs.callPackage ../../pkgs/pi { };
   # The upstream subagent example is the basis for delegated agents. Patch it
   # so `tools: none` disables tools, subagents are identifiable at runtime, and
   # agent definitions are read from the packaged configuration rather than from

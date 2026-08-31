@@ -40,10 +40,13 @@
         # them: the flake's own outputs use the registry defaults, while
         # consumers can build a configuration for their own model choices.
         mkResult =
-          models:
+          {
+            models ? { },
+            piPackage ? null,
+          }:
           let
             moduleArgs = {
-              inherit pkgs altPreferences models;
+              inherit pkgs altPreferences models piPackage;
               packages = result.packages;
             };
             result =
@@ -95,7 +98,12 @@
               inherit (nixpkgs) lib;
               inherit models;
             };
-          mkPi = models: (mkResult models).packages.pi;
+          mkPi =
+            {
+              models ? { },
+              piPackage ? null,
+            }:
+            (mkResult { inherit models piPackage; }).packages.pi;
         };
       }
     );
