@@ -21,17 +21,15 @@
         };
         mkAlt = commands: replacement: packages: {
           inherit commands packages;
-          enable = false;
           context = "${builtins.head commands} use is precluded entirely by ${replacement} (`${replacement} --help` if you're unfamiliar).";
         };
-        bashAlts = {
+        altPreferences = {
           git = mkAlt [ "git" "git *" "*/git" "*/git *" ] "jj" [ pkgs.jujutsu ];
           find = mkAlt [ "find" "find *" ] "fd" [ pkgs.fd ];
           grep = mkAlt [ "grep" "grep *" ] "rg" [ pkgs.ripgrep ];
         };
         moduleOptions = import ./nix/options.nix { inherit (nixpkgs) lib; };
-        extensionOpts = moduleOptions.options.extensionOpts.default;
-        piModules = [
+        modules = [
           ./nix/modules/pi.nix
           ./nix/modules/analyzer.nix
           ./nix/modules/permission-gate.nix
@@ -41,44 +39,19 @@
         # Models are host policy, so the outputs are built as a function of
         # them: the flake's own outputs use the registry defaults, while
         # consumers can build a configuration for their own model choices.
-        mkConfig =
-          {
-            modules ? [ ],
-            bashAltsOverride ? null,
-            extensionOptsOverride ? null,
-          }:
-          (nixpkgs.lib.evalModules {
-            modules = [
-              moduleOptions
-              {
-                config = {
-                  # mkDefault provides the registry values while allowing
-                  # downstream modules to override individual options.
-                  bashAlts = nixpkgs.lib.mkDefault (if bashAltsOverride == null then bashAlts else bashAltsOverride);
-                  extensionOpts = nixpkgs.lib.mkDefault (
-                    if extensionOptsOverride == null then extensionOpts else extensionOptsOverride
-                  );
-                };
-              }
-            ]
-            ++ modules;
-          }).config;
         mkResult =
           {
             models ? { },
-            modules ? [ ],
-            bashAlts ? null,
-            extensionOpts ? null,
+            piPackage ? null,
           }:
           let
-            config = mkConfig {
-              inherit modules;
-              bashAltsOverride = bashAlts;
-              extensionOptsOverride = extensionOpts;
-            };
             moduleArgs = {
-              inherit pkgs models;
-              inherit (config) bashAlts extensionOpts;
+              inherit
+                pkgs
+                altPreferences
+                models
+                piPackage
+                ;
               packages = result.packages;
             };
             result =
@@ -110,7 +83,7 @@
                   checks = { };
                   devShellPackages = [ ];
                 }
-                piModules;
+                modules;
           in
           result;
         result = mkResult { };
@@ -124,10 +97,6 @@
         # Consumers (other harnesses, other hosts) build from the same registry
         # and the same packaged configuration.
         lib = {
-          # Expose the option defaults so downstream flakes can extend or
-          # override the shared command alternatives and extension selection.
-          inherit bashAlts extensionOpts;
-
           agents =
             models:
             import ./nix/agents.nix {
@@ -137,18 +106,10 @@
           mkPi =
             {
               models ? { },
-              modules ? [ ],
-              bashAlts ? null,
-              extensionOpts ? null,
+              piPackage ? null,
+              ...
             }:
-            (mkResult {
-              inherit
-                models
-                modules
-                bashAlts
-                extensionOpts
-                ;
-            }).packages.pi;
+            (mkResult { inherit models piPackage; }).packages.pi;
         };
       }
     );

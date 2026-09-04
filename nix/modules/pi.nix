@@ -1,9 +1,9 @@
 {
   pkgs,
   packages,
-  bashAlts,
+  altPreferences,
   models,
-  extensionOpts,
+  piPackage ? null,
   ...
 }:
 let
@@ -21,17 +21,7 @@ let
     );
   agentFiles = writeMarkdown "pi-agents" agents.piAgents;
   promptFiles = writeMarkdown "pi-prompts" agents.piPrompts;
-  permissionFiles = pkgs.linkFarm "pi-agent-permissions" (
-    pkgs.lib.mapAttrsToList (name: agent: {
-      name = "${name}.json";
-      path = pkgs.writeText "${name}-permissions.json" (builtins.toJSON agent.permissions);
-    }) agents.agents
-  );
   basePermissions = builtins.fromJSON (builtins.readFile ../../permissions.json);
-  enabledAltPreferences = pkgs.lib.filterAttrs (_: alt: alt.enable or false) bashAlts;
-  enabledExtensions = pkgs.lib.attrNames (
-    pkgs.lib.filterAttrs (_: extension: extension.enable or false) extensionOpts
-  );
   altRules = builtins.concatLists (
     pkgs.lib.mapAttrsToList (
       _: alt:
@@ -39,7 +29,7 @@ let
         inherit command;
         context = alt.context;
       }) alt.commands
-    ) enabledAltPreferences
+    ) altPreferences
   );
   permissions = basePermissions // {
     bash = basePermissions.bash // {
@@ -48,7 +38,7 @@ let
   };
   permissionsFile = pkgs.writeText "permissions.defaults.json" (builtins.toJSON permissions);
   altPackages = pkgs.lib.concatLists (
-    pkgs.lib.mapAttrsToList (_: alt: alt.packages or [ ]) enabledAltPreferences
+    pkgs.lib.mapAttrsToList (_: alt: alt.packages or [ ]) altPreferences
   );
   piConfig = pkgs.stdenv.mkDerivation {
     pname = "pi-config";
@@ -62,24 +52,17 @@ let
       # the argument hint.
       ln -s ${agentFiles} "$out/agent/agents"
       ln -s ${promptFiles} "$out/agent/prompts"
-      ln -s ${permissionFiles} "$out/agent/permissions"
       for extension in ${../../pi}/*/; do
         name=$(basename "$extension")
         case "$name" in
           *.patch|*.test.ts) ;;
-          *)
-            case " ${builtins.concatStringsSep " " enabledExtensions} " in
-              *" $name "*) ln -s "$extension" "$out/agent/extensions/$name" ;;
-            esac
-            ;;
+          *) ln -s "$extension" "$out/agent/extensions/$name" ;;
         esac
       done
-      if ${if extensionOpts.subagent.enable or false then "true" else "false"}; then
-        ln -s ${subagentExtension} "$out/agent/extensions/subagent"
-      fi
+      ln -s ${subagentExtension} "$out/agent/extensions/subagent"
     '';
   };
-  upstreamPi = pkgs.callPackage ../../pkgs/pi { };
+  upstreamPi = if piPackage != null then piPackage else pkgs.callPackage ../../pkgs/pi { };
   # The upstream subagent example is the basis for delegated agents. Patch it
   # so `tools: none` disables tools, subagents are identifiable at runtime, and
   # agent definitions are read from the packaged configuration rather than from
