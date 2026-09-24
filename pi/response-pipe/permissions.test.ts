@@ -22,8 +22,28 @@ writeFileSync(
   }),
 );
 
-const evaluate = (command: string, sessionEntries: unknown[] = []) =>
-  evaluatePipePermissions({ command, cwd, home, sessionEntries });
+const evaluate = (
+  command: string,
+  sessionEntries: unknown[] = [],
+  {
+    configDir = join(home, ".pi", "agent"),
+    subagentName,
+  }: { configDir?: string; subagentName?: string } = {},
+) => {
+  const previousConfig = process.env.PI_CONFIG_DIR;
+  const previousScope = process.env.PI_SUBAGENT_NAME;
+  process.env.PI_CONFIG_DIR = configDir;
+  if (subagentName === undefined) delete process.env.PI_SUBAGENT_NAME;
+  else process.env.PI_SUBAGENT_NAME = subagentName;
+  try {
+    return evaluatePipePermissions({ command, cwd, home, sessionEntries });
+  } finally {
+    if (previousConfig === undefined) delete process.env.PI_CONFIG_DIR;
+    else process.env.PI_CONFIG_DIR = previousConfig;
+    if (previousScope === undefined) delete process.env.PI_SUBAGENT_NAME;
+    else process.env.PI_SUBAGENT_NAME = previousScope;
+  }
+};
 
 test("allowlisted commands skip confirmation while unknown commands do not", () => {
   expect(evaluate("sort")).toMatchObject({ verdict: "allow", basis: "sort" });
@@ -62,18 +82,12 @@ test("response-pipe applies delegated-agent policy restrictions", () => {
       bash: { "sort *": { action: "deny", context: "agent is read-only" } },
     }),
   );
-  const previousConfig = process.env.PI_CONFIG_DIR;
-  const previousScope = process.env.PI_SUBAGENT_NAME;
-  process.env.PI_CONFIG_DIR = configDir;
-  process.env.PI_SUBAGENT_NAME = "restricted";
-  try {
-    expect(evaluate("sort input").verdict).toBe("deny");
-  } finally {
-    if (previousConfig === undefined) delete process.env.PI_CONFIG_DIR;
-    else process.env.PI_CONFIG_DIR = previousConfig;
-    if (previousScope === undefined) delete process.env.PI_SUBAGENT_NAME;
-    else process.env.PI_SUBAGENT_NAME = previousScope;
-  }
+  expect(
+    evaluate("sort input", [], {
+      configDir,
+      subagentName: "restricted",
+    }).verdict,
+  ).toBe("deny");
 });
 
 test("session grants are portable across the integration boundary", () => {

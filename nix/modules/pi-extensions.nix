@@ -25,7 +25,9 @@ let
         bundle="$TMPDIR/permission-gate.js"
         bun build "$work/permission-gate/index.ts" --bundle --format=esm --target=bun --external='@earendil-works/pi-coding-agent' --outfile "$bundle"
         GATE_SOURCE_PATH="$bundle" bun test "$work/permission-gate.generated.test.ts"
-        find "$work" -path '*/node_modules' -prune -o -mindepth 2 -maxdepth 2 -name index.ts -print0 | xargs -0 -n1 bun --check
+        find "$work" -path '*/node_modules' -prune -o -mindepth 2 -maxdepth 2 -name index.ts \
+          -exec bun build --no-bundle --target=bun --external='*' \
+            --outfile "$TMPDIR/extension-syntax-check.js" {} \;
         touch "$out"
       '';
 in
