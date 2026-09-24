@@ -8,7 +8,7 @@
   nodejs_22,
 }:
 let
-  version = "0.85.0";
+  version = "0.87.1";
 
   platform =
     if stdenv.hostPlatform.isDarwin then
@@ -18,31 +18,13 @@ let
     else
       "linux-x64";
 
-  clipboardNativePackage =
-    {
-      darwin-arm64 = "clipboard-darwin-arm64";
-      darwin-x64 = "clipboard-darwin-x64";
-      linux-arm64 = "clipboard-linux-arm64-gnu";
-      linux-x64 = "clipboard-linux-x64-gnu";
-    }
-    .${platform};
-
-  clipboardNativeFile =
-    {
-      darwin-arm64 = "clipboard.darwin-arm64.node";
-      darwin-x64 = "clipboard.darwin-x64.node";
-      linux-arm64 = "clipboard.linux-arm64-gnu.node";
-      linux-x64 = "clipboard.linux-x64-gnu.node";
-    }
-    .${platform};
-
   # `npm run build` hydrates provider model data by hitting every upstream model
   # API, which a sandboxed build cannot do. The published npm package for the
   # matching version ships the already-hydrated data, so drop that in and use
   # `build:offline`.
   modelData = fetchurl {
     url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${version}.tgz";
-    hash = "sha256-RhiL2stVWgdGagER85Y/IJMqFhmeTWz7jUSn/l/G40I=";
+    hash = "sha256-NbRDLyfMJmX4a+67mvajmxJRlwiDwwRL2L5PToxzHKA=";
   };
 in
 buildNpmPackage (finalAttrs: {
@@ -53,10 +35,11 @@ buildNpmPackage (finalAttrs: {
     owner = "earendil-works";
     repo = "pi";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-gznGlneVCx3htxRiJq0/futm4qLR9Bzfv3UwP3ES9v0=";
+    hash = "sha256-GUhlq6t+l6iiViOZ0bkV28v3ZDqcLvEwpZpYZ5JAyDk=";
   };
 
-  npmDepsHash = "sha256-K/KiukwTHwu4HE8hUu7ur3bxggwfO0WL+QDI0FtxP3I=";
+  # Refresh this with `nix build` when the upstream lockfile changes.
+  npmDepsHash = "sha256-JBIYoP2vvRNz1HONNvDJ1U3c+nmCJ7/VgNthRTkrkIA=";
 
   nodejs = nodejs_22;
 
@@ -109,17 +92,16 @@ buildNpmPackage (finalAttrs: {
     cp dist/modes/interactive/assets/* $out/bin/assets/
     cp -r dist/core/export-html docs examples $out/bin/
 
-    mkdir -p $out/bin/node_modules/@mariozechner
-    cp -r ../../node_modules/@mariozechner/clipboard $out/bin/node_modules/@mariozechner/
-    cp -r ../../node_modules/@mariozechner/${clipboardNativePackage} $out/bin/node_modules/@mariozechner/
-    cp ../../node_modules/@mariozechner/${clipboardNativePackage}/${clipboardNativeFile} \
-      $out/bin/node_modules/@mariozechner/clipboard/
-    chmod -R u+w $out/bin/node_modules
-
     ${lib.optionalString stdenv.hostPlatform.isDarwin ''
       mkdir -p $out/bin/native/darwin/prebuilds/${platform}
-      cp ../tui/native/darwin/prebuilds/${platform}/darwin-modifiers.node \
+      cp ../tui/native/darwin/prebuilds/${platform}/darwin-platform.node \
         $out/bin/native/darwin/prebuilds/${platform}/
+    ''}
+
+    ${lib.optionalString stdenv.hostPlatform.isLinux ''
+      mkdir -p $out/bin/native/linux/prebuilds/${platform}
+      cp ../tui/native/linux/prebuilds/${platform}/linux-platform-x11.node \
+        $out/bin/native/linux/prebuilds/${platform}/
     ''}
 
     popd > /dev/null
