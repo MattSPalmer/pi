@@ -1,4 +1,8 @@
-{ lib, ... }:
+{
+  lib,
+  system ? "",
+  ...
+}:
 let
   dependencyType = lib.types.either lib.types.str (
     lib.types.submodule {
@@ -39,7 +43,7 @@ let
       cost-status.enable = true;
       export-response.enable = true;
       sesseract = default;
-      mac-system-theme = default;
+      mac-system-theme.enable = lib.hasSuffix "-darwin" system;
       kagi-search = default;
       fetch-webpage = default;
 

@@ -29,7 +29,10 @@
           find = mkAlt [ "find" "find *" ] "fd" [ pkgs.fd ];
           grep = mkAlt [ "grep" "grep *" ] "rg" [ pkgs.ripgrep ];
         };
-        moduleOptions = import ./nix/options.nix { inherit (nixpkgs) lib; };
+        moduleOptions = import ./nix/options.nix {
+          inherit (nixpkgs) lib;
+          inherit system;
+        };
         extensions = moduleOptions.options.extensions.default;
         piModules = [
           ./nix/modules/pi.nix
