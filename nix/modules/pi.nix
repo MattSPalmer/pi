@@ -4,7 +4,7 @@
   bashAlts,
   models,
   piPackage ? null,
-  extensionOpts,
+  extensions,
   ...
 }:
 let
@@ -31,7 +31,7 @@ let
   basePermissions = builtins.fromJSON (builtins.readFile ../../permissions.json);
   enabledAltPreferences = pkgs.lib.filterAttrs (_: alt: alt.enable or false) bashAlts;
   enabledExtensions = pkgs.lib.attrNames (
-    pkgs.lib.filterAttrs (_: extension: extension.enable or false) extensionOpts
+    pkgs.lib.filterAttrs (_: extension: extension.enable or false) extensions
   );
   altRules = builtins.concatLists (
     pkgs.lib.mapAttrsToList (
@@ -75,7 +75,7 @@ let
             ;;
         esac
       done
-      if ${if extensionOpts.subagent.enable or false then "true" else "false"}; then
+      if ${if extensions.subagent.enable or false then "true" else "false"}; then
         ln -s ${subagentExtension} "$out/agent/extensions/subagent"
       fi
     '';

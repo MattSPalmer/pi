@@ -1,30 +1,48 @@
 { lib, ... }:
-{
-  options.extensionOpts = lib.mkOption {
-    type = lib.types.attrsOf (
-      lib.types.submodule {
-        options.enable = lib.mkOption {
-          type = lib.types.bool;
-          default = true;
-          description = "Whether to package this Pi extension.";
-        };
-      }
-    );
-    default = {
-      permission-gate.enable = true;
-      propose-permission.enable = true;
-      elements.enable = true;
-      subagent.enable = true;
-      committing-mode.enable = true;
-      cost-status.enable = true;
-      export-response.enable = true;
-      sesseract.enable = true;
-      mac-system-theme.enable = true;
-      kagi-search.enable = false;
-      fetch-webpage.enable = true;
-      response-pipe.enable = false;
+let
+  extensionDefaults = {
+    permission-gate = true;
+    propose-permission = true;
+    elements = true;
+    subagent = true;
+    committing-mode = true;
+    cost-status = true;
+    export-response = true;
+    sesseract = true;
+    mac-system-theme = true;
+    kagi-search = false;
+    fetch-webpage = true;
+    response-pipe = false;
+  };
+  extensionOption = default: {
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      inherit default;
+      description = "Whether to package and load this Pi extension.";
     };
-    description = "Pi extensions to package and load.";
+  };
+  extensionDefaultsConfig = lib.mapAttrs (_: enabled: { enable = enabled; }) extensionDefaults;
+in
+{
+  imports = [ (lib.mkAliasOptionModule [ "extensionOpts" ] [ "extensions" ]) ];
+
+  options.extensions = lib.mkOption {
+    type = lib.types.submodule {
+      # Keep extension options explicit for bundled extensions while allowing
+      # downstream flakes to add their own named extensions (e.g. `pocket`).
+      freeformType = lib.types.attrsOf (
+        lib.types.submodule {
+          options.enable = lib.mkOption {
+            type = lib.types.bool;
+            default = true;
+            description = "Whether to package and load this Pi extension.";
+          };
+        }
+      );
+      options = lib.mapAttrs (_: extensionOption) extensionDefaults;
+    };
+    default = extensionDefaultsConfig;
+    description = "Bundled and downstream Pi extensions to package and load.";
   };
 
   options.bashAlts = lib.mkOption {

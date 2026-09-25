@@ -30,7 +30,7 @@
           grep = mkAlt [ "grep" "grep *" ] "rg" [ pkgs.ripgrep ];
         };
         moduleOptions = import ./nix/options.nix { inherit (nixpkgs) lib; };
-        extensionOpts = moduleOptions.options.extensionOpts.default;
+        extensions = moduleOptions.options.extensions.default;
         piModules = [
           ./nix/modules/pi.nix
           ./nix/modules/analyzer.nix
@@ -45,6 +45,7 @@
           {
             modules ? [ ],
             bashAltsOverride ? null,
+            extensionsOverride ? null,
             extensionOptsOverride ? null,
           }:
           (nixpkgs.lib.evalModules {
@@ -55,8 +56,13 @@
                   # mkDefault provides the registry values while allowing
                   # downstream modules to override individual options.
                   bashAlts = nixpkgs.lib.mkDefault (if bashAltsOverride == null then bashAlts else bashAltsOverride);
-                  extensionOpts = nixpkgs.lib.mkDefault (
-                    if extensionOptsOverride == null then extensionOpts else extensionOptsOverride
+                  extensions = nixpkgs.lib.mkDefault (
+                    if extensionsOverride != null then
+                      extensionsOverride
+                    else if extensionOptsOverride != null then
+                      extensionOptsOverride
+                    else
+                      extensions
                   );
                 };
               }
@@ -69,17 +75,19 @@
             modules ? [ ],
             piPackage ? null,
             bashAlts ? null,
+            extensions ? null,
             extensionOpts ? null,
           }:
           let
             config = mkConfig {
               inherit modules;
               bashAltsOverride = bashAlts;
+              extensionsOverride = extensions;
               extensionOptsOverride = extensionOpts;
             };
             moduleArgs = {
               inherit pkgs models piPackage;
-              inherit (config) bashAlts extensionOpts;
+              inherit (config) bashAlts extensions;
               packages = result.packages;
             };
             result =
@@ -127,7 +135,9 @@
         lib = {
           # Expose the option defaults so downstream flakes can extend or
           # override the shared command alternatives and extension selection.
-          inherit bashAlts extensionOpts;
+          inherit bashAlts extensions;
+          # Backward-compatible alias; prefer `extensions.<name>.enable`.
+          extensionOpts = extensions;
 
           agents =
             models:
@@ -141,6 +151,7 @@
               modules ? [ ],
               piPackage ? null,
               bashAlts ? null,
+              extensions ? null,
               extensionOpts ? null,
             }:
             (mkResult {
@@ -149,6 +160,7 @@
                 modules
                 piPackage
                 bashAlts
+                extensions
                 extensionOpts
                 ;
             }).packages.pi;

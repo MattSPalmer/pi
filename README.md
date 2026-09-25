@@ -97,14 +97,21 @@ pi.lib.${system}.mkPi {
     {
       bashAlts.find.enable = true;
       bashAlts.grep.enable = true;
-      extensionOpts.kagi-search.enable = true;
+      extensions.kagi-search.enable = true;
+      extensions.cost-status.enable = false;
     }
   ];
 }
 ```
 
-The evaluated defaults are also available as `lib.bashAlts` and
-`lib.extensionOpts`. Explicit `bashAlts` and `extensionOpts` arguments remain
-available when a consumer needs to replace those option values wholesale.
+Each bundled extension has an `extensions.<name>.enable` option. The bundled
+names are `permission-gate`, `propose-permission`, `elements`, `subagent`,
+`committing-mode`, `cost-status`, `export-response`, `sesseract`,
+`mac-system-theme`, `kagi-search`, `fetch-webpage`, and `response-pipe`.
+`kagi-search` and `response-pipe` default to disabled; the rest default to
+enabled. Defaults are available as `lib.extensions` (and `lib.bashAlts` for
+command alternatives). `extensionOpts` remains as a backwards-compatible alias
+for `extensions`; explicit `bashAlts`, `extensions`, and legacy `extensionOpts`
+arguments are also available to consumers that do not use module definitions.
 
 Changes to packaged agents, extensions, permissions, or the analyzer are included automatically in the next Nix build. The Pi dependency itself is pinned in `pkgs/pi/default.nix` and should be updated together with its source and dependency hashes.
