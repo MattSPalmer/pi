@@ -109,9 +109,15 @@ names are `permission-gate`, `propose-permission`, `elements`, `subagent`,
 `committing-mode`, `cost-status`, `export-response`, `sesseract`,
 `mac-system-theme`, `kagi-search`, `fetch-webpage`, and `response-pipe`.
 `kagi-search` and `response-pipe` default to disabled; the rest default to
-enabled. Defaults are available as `lib.extensions` (and `lib.bashAlts` for
-command alternatives). `extensionOpts` remains as a backwards-compatible alias
-for `extensions`; explicit `bashAlts`, `extensions`, and legacy `extensionOpts`
+enabled. Extensions can declare `dependsOn` as names or as `{ name, version }`
+records; version values are exact pins checked against the dependency's
+`extensions.<name>.version`. Dependencies are included transitively even when
+their own `enable` is false. `propose-permission` and `response-pipe` both
+depend on `permission-gate` by default.
+
+Defaults are available as `lib.extensions` (and `lib.bashAlts` for command
+alternatives). `extensionOpts` remains as a backwards-compatible alias for
+`extensions`; explicit `bashAlts`, `extensions`, and legacy `extensionOpts`
 arguments are also available to consumers that do not use module definitions.
 
 Changes to packaged agents, extensions, permissions, or the analyzer are included automatically in the next Nix build. The Pi dependency itself is pinned in `pkgs/pi/default.nix` and should be updated together with its source and dependency hashes.

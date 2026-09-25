@@ -123,9 +123,26 @@
           in
           result;
         result = mkResult { };
+        piWithRequiredExtension =
+          (mkResult {
+            modules = [
+              {
+                extensions.permission-gate.enable = false;
+                extensions.propose-permission.enable = true;
+              }
+            ];
+          }).packages.pi;
       in
       (nixpkgs.lib.removeAttrs result [ "devShellPackages" ])
       // {
+        checks = result.checks // {
+          extensionDependencies = pkgs.runCommand "pi-extension-dependencies-test" { } ''
+            test -e ${piWithRequiredExtension}/agent/extensions/permission-gate/index.ts
+            test -e ${piWithRequiredExtension}/agent/extensions/propose-permission/index.ts
+            touch "$out"
+          '';
+        };
+
         devShells.default = pkgs.mkShell {
           packages = nixpkgs.lib.unique result.devShellPackages;
         };

@@ -30,9 +30,56 @@ let
   );
   basePermissions = builtins.fromJSON (builtins.readFile ../../permissions.json);
   enabledAltPreferences = pkgs.lib.filterAttrs (_: alt: alt.enable or false) bashAlts;
-  enabledExtensions = pkgs.lib.attrNames (
+  extensionDependencies =
+    extension:
+    map (
+      dependency:
+      if builtins.isString dependency then
+        {
+          name = dependency;
+          version = null;
+        }
+      else
+        dependency
+    ) (extension.dependsOn or [ ]);
+  resolveExtensionDependencies =
+    enabled:
+    let
+      dependencies = builtins.concatMap (
+        name:
+        map (dependency: dependency // { requiredBy = name; }) (extensionDependencies extensions.${name})
+      ) (pkgs.lib.attrNames enabled);
+      missing = builtins.filter (dependency: !(builtins.hasAttr dependency.name extensions)) dependencies;
+      versionMismatches = builtins.filter (
+        dependency:
+        builtins.hasAttr dependency.name extensions
+        && dependency.version != null
+        && (extensions.${dependency.name}.version or null) != dependency.version
+      ) dependencies;
+      next = builtins.foldl' (
+        selected: dependency: selected // { ${dependency.name} = extensions.${dependency.name}; }
+      ) enabled dependencies;
+    in
+    if missing != [ ] then
+      let
+        dependency = builtins.head missing;
+      in
+      throw "Pi extension '${dependency.requiredBy}' depends on unknown extension '${dependency.name}'"
+    else if versionMismatches != [ ] then
+      let
+        dependency = builtins.head versionMismatches;
+      in
+      throw "Pi extension '${dependency.requiredBy}' requires ${dependency.name} version '${dependency.version}', but the configured version is '${
+        extensions.${dependency.name}.version or "unspecified"
+      }'"
+    else if pkgs.lib.attrNames next == pkgs.lib.attrNames enabled then
+      enabled
+    else
+      resolveExtensionDependencies next;
+  enabledExtensionSet = resolveExtensionDependencies (
     pkgs.lib.filterAttrs (_: extension: extension.enable or false) extensions
   );
+  enabledExtensions = pkgs.lib.attrNames enabledExtensionSet;
   altRules = builtins.concatLists (
     pkgs.lib.mapAttrsToList (
       _: alt:
@@ -75,7 +122,7 @@ let
             ;;
         esac
       done
-      if ${if extensions.subagent.enable or false then "true" else "false"}; then
+      if ${if enabledExtensionSet.subagent.enable or false then "true" else "false"}; then
         ln -s ${subagentExtension} "$out/agent/extensions/subagent"
       fi
     '';
