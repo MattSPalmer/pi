@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { normalize } from "node:path";
 
 import {
@@ -25,6 +26,7 @@ const RULES: Record<string, { bash: CompiledRule[]; paths: CompiledRule[] }> = {
   "": { bash: [], paths: [] },
 };
 const home = process.env.HOME || "~";
+const bashAltInstructions = process.env.PI_BASH_ALT_INSTRUCTIONS;
 
 const scope = process.env.PI_SUBAGENT_NAME || "";
 const rules = RULES[scope] || RULES[""];
@@ -246,6 +248,14 @@ const checkPath = async (
 };
 
 export default function (pi: ExtensionAPI) {
+  if (bashAltInstructions) {
+    const instructions = readFileSync(bashAltInstructions, "utf8");
+    if (instructions) {
+      pi.on("before_agent_start", async (event) => ({
+        systemPrompt: `${event.systemPrompt}${instructions}`,
+      }));
+    }
+  }
   pi.on("session_start", async (_event, ctx) => {
     ({ bash: bashRules, paths: pathRules } = activateProjectRules(
       ctx.cwd,

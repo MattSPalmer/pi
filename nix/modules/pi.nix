@@ -95,6 +95,13 @@ let
     };
   };
   permissionsFile = pkgs.writeText "permissions.defaults.json" (builtins.toJSON permissions);
+  altInstructions = pkgs.writeText "bash-alt-instructions.md" (
+    if altRules == [ ] then
+      ""
+    else
+      "\n\nBash command alternatives (ALT rules):\n"
+      + pkgs.lib.concatMapStrings (rule: "- Do not use `${rule.command}`; ${rule.context}\n") altRules
+  );
   altPackages = pkgs.lib.concatLists (
     pkgs.lib.mapAttrsToList (_: alt: alt.packages or [ ]) enabledAltPreferences
   );
@@ -150,6 +157,7 @@ let
     ]
     ++ altPackages;
     runtimeEnv.PI_CONFIG_DIR = "${piConfig}/agent";
+    runtimeEnv.PI_BASH_ALT_INSTRUCTIONS = "${altInstructions}";
     text = ''
       # PI_CONFIG_DIR identifies the immutable packaged configuration, which is
       # loaded straight from the store. Nothing is copied or linked into the
