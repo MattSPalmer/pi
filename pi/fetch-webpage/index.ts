@@ -1,4 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { spawn } from "node:child_process";
+import { Buffer } from "node:buffer";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Type } from "typebox";
 
 const Parameters = Type.Object({
@@ -9,6 +14,8 @@ const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_MARKDOWN_BYTES = 32 * 1024;
 const TIMEOUT_MS = 30_000;
 const MAX_REDIRECTS = 3;
+
+const curlPath = process.env.PI_FETCH_WEBPAGE_CURL || "curl";
 
 function decodeHtml(value: string): string {
   return value
@@ -110,43 +117,182 @@ function extract(html: string): {
   };
 }
 
+type HeaderBlock = {
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+};
+
+function parseHeaderBlocks(raw: string): HeaderBlock[] {
+  return raw
+    .split(/\r?\n\r?\n/)
+    .map((block) => {
+      const [statusLine, ...lines] = block.split(/\r?\n/);
+      const status = statusLine?.match(/^HTTP\/\S+\s+(\d{3})(?:\s+(.*))?$/i);
+      if (!status) return undefined;
+      const headers: Record<string, string> = {};
+      for (const line of lines) {
+        const separator = line.indexOf(":");
+        if (separator < 1) continue;
+        const name = line.slice(0, separator).trim().toLowerCase();
+        const value = line.slice(separator + 1).trim();
+        headers[name] = headers[name] ? `${headers[name]}, ${value}` : value;
+      }
+      return {
+        status: Number(status[1]),
+        statusText: status[2] || "",
+        headers,
+      };
+    })
+    .filter((block): block is HeaderBlock => block !== undefined);
+}
+
+function runCurl(args: string[], signal: AbortSignal): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const child = spawn(curlPath, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const stdout: Buffer[] = [];
+    let stderr = "";
+    let settled = false;
+    const cleanup = () => signal.removeEventListener("abort", abort);
+    const finish = (error?: Error, output?: string) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve(output || "");
+    };
+    const abort = () => child.kill("SIGTERM");
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    child.stdout.on("data", (chunk: Uint8Array) =>
+      stdout.push(Buffer.from(chunk)),
+    );
+    child.stderr.on("data", (chunk: Uint8Array) => {
+      if (stderr.length < 8192) stderr += Buffer.from(chunk).toString("utf8");
+    });
+    child.once("error", (error) => finish(error));
+    child.once("close", (code, terminationSignal) => {
+      if (signal.aborted) {
+        finish(
+          signal.reason instanceof Error
+            ? signal.reason
+            : new DOMException("Aborted", "AbortError"),
+        );
+      } else if (code !== 0) {
+        finish(
+          new Error(
+            stderr.trim() ||
+              `curl exited with ${code === null ? terminationSignal : code}`,
+          ),
+        );
+      } else {
+        finish(undefined, Buffer.concat(stdout).toString("utf8"));
+      }
+    });
+  });
+}
+
 async function fetchPage(
   input: string,
-): Promise<{ response: Response; finalUrl: string; bytes: number }> {
-  let current = new URL(input);
-  if (!["http:", "https:"].includes(current.protocol))
+  signal?: AbortSignal,
+): Promise<{
+  body: Buffer;
+  contentType: string;
+  finalUrl: string;
+  status: number;
+  statusText: string;
+  bytes: number;
+}> {
+  const url = new URL(input);
+  if (!["http:", "https:"].includes(url.protocol))
     throw new Error("URL must use HTTP or HTTPS");
-  for (let redirects = 0; ; redirects++) {
-    const response = await fetch(current, {
-      redirect: "manual",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { "user-agent": "pi-fetch-webpage/1.0" },
-    });
-    if (![301, 302, 303, 307, 308].includes(response.status)) {
-      const buffer = await response.arrayBuffer();
-      if (buffer.byteLength > MAX_BODY_BYTES)
-        throw new Error(
-          `Response exceeds the 1 MiB download limit (${buffer.byteLength} bytes)`,
-        );
-      return {
-        response: new Response(buffer, {
-          status: response.status,
-          headers: response.headers,
-        }),
-        finalUrl: current.href,
-        bytes: buffer.byteLength,
-      };
+  const directory = mkdtempSync(join(tmpdir(), "pi-fetch-webpage-"));
+  const bodyPath = join(directory, "body");
+  const headersPath = join(directory, "headers");
+  const controller = new AbortController();
+  const abortFromPi = () =>
+    controller.abort(
+      signal?.reason ?? new DOMException("Aborted", "AbortError"),
+    );
+  if (signal?.aborted) abortFromPi();
+  else signal?.addEventListener("abort", abortFromPi, { once: true });
+  const timer = setTimeout(() => {
+    controller.abort(
+      new DOMException("The operation timed out", "TimeoutError"),
+    );
+  }, TIMEOUT_MS);
+  try {
+    const args = [
+      "--disable",
+      "--silent",
+      "--show-error",
+      "--location",
+      "--max-redirs",
+      String(MAX_REDIRECTS),
+      "--max-time",
+      String(TIMEOUT_MS / 1000),
+      "--max-filesize",
+      String(MAX_BODY_BYTES),
+      "--proto",
+      "=http,https",
+      "--proto-redir",
+      "=http,https",
+      "--user-agent",
+      "pi-fetch-webpage/1.0",
+      "--dump-header",
+      headersPath,
+      "--output",
+      bodyPath,
+      "--write-out",
+      "%{json}",
+      url.href,
+    ];
+    const metadata = await runCurl(args, controller.signal);
+    const info = JSON.parse(metadata) as {
+      content_type?: string;
+      response_code?: number;
+      url_effective?: string;
+    };
+    const headerText = readFileSync(headersPath, "utf8");
+    const blocks = parseHeaderBlocks(headerText);
+    const redirects = blocks.filter((block) =>
+      [301, 302, 303, 307, 308].includes(block.status),
+    );
+    let from = url;
+    for (const redirect of redirects) {
+      const location = redirect.headers.location;
+      if (!location) continue;
+      from = new URL(location, from);
     }
-    if (redirects >= MAX_REDIRECTS)
-      throw new Error(`Exceeded the ${MAX_REDIRECTS}-redirect limit`);
-    const location = response.headers.get("location");
-    if (!location)
+    const finalHeaders = blocks.at(-1);
+    const status = Number(info.response_code || finalHeaders?.status || 0);
+    if (!status) throw new Error("curl completed without an HTTP response");
+    const body = readFileSync(bodyPath);
+    if (body.byteLength > MAX_BODY_BYTES)
       throw new Error(
-        `HTTP ${response.status} redirect has no Location header`,
+        `Response exceeds the 1 MiB download limit (${body.byteLength} bytes)`,
       );
-    current = new URL(location, current);
-    if (!["http:", "https:"].includes(current.protocol))
-      throw new Error("Redirect target must use HTTP or HTTPS");
+    const finalUrl = info.url_effective || from.href;
+    const contentType =
+      info.content_type || finalHeaders?.headers["content-type"] || "";
+    return {
+      body,
+      contentType,
+      finalUrl,
+      status,
+      statusText: finalHeaders?.statusText || "",
+      bytes: body.byteLength,
+    };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abortFromPi);
+    rmSync(directory, { recursive: true, force: true });
   }
 }
 
@@ -164,18 +310,18 @@ export default function fetchWebpage(pi: ExtensionAPI) {
       "Fetch an HTTP(S) webpage and convert its readable content to bounded Markdown.",
     promptSnippet: "fetch_webpage — fetch a URL as Markdown",
     parameters: Parameters,
-    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
       try {
         const input = new URL(params.url);
         if (!["http:", "https:"].includes(input.protocol))
           throw new Error("URL must use HTTP or HTTPS");
-        const fetched = await fetchPage(input.href);
-        if (!fetched.response.ok)
-          throw new Error(
-            `HTTP ${fetched.response.status} ${fetched.response.statusText}`,
-          );
-        const contentType = fetched.response.headers.get("content-type") || "";
-        const body = await fetched.response.text();
+        const fetched = await fetchPage(input.href, signal);
+        if (fetched.status < 200 || fetched.status >= 300)
+          throw new Error(`HTTP ${fetched.status} ${fetched.statusText}`);
+        const contentType = fetched.contentType;
+        const body = await new Response(fetched.body, {
+          headers: { "content-type": contentType },
+        }).text();
         const extracted = contentType.includes("html")
           ? extract(body)
           : {

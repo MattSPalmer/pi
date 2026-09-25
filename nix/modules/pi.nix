@@ -80,6 +80,7 @@ let
     pkgs.lib.filterAttrs (_: extension: extension.enable or false) extensions
   );
   enabledExtensions = pkgs.lib.attrNames enabledExtensionSet;
+  fetchWebpageEnabled = enabledExtensionSet.fetch-webpage.enable or false;
   altRules = builtins.concatLists (
     pkgs.lib.mapAttrsToList (
       _: alt:
@@ -155,9 +156,15 @@ let
       upstreamPi
       packages.tree-sitter-bash-analyzer
     ]
-    ++ altPackages;
-    runtimeEnv.PI_CONFIG_DIR = "${piConfig}/agent";
-    runtimeEnv.PI_BASH_ALT_INSTRUCTIONS = "${altInstructions}";
+    ++ altPackages
+    ++ pkgs.lib.optionals fetchWebpageEnabled [ pkgs.curl ];
+    runtimeEnv = {
+      PI_CONFIG_DIR = "${piConfig}/agent";
+      PI_BASH_ALT_INSTRUCTIONS = "${altInstructions}";
+    }
+    // pkgs.lib.optionalAttrs fetchWebpageEnabled {
+      PI_FETCH_WEBPAGE_CURL = "${pkgs.curl}/bin/curl";
+    };
     text = ''
       # PI_CONFIG_DIR identifies the immutable packaged configuration, which is
       # loaded straight from the store. Nothing is copied or linked into the

@@ -26,6 +26,39 @@ let
     url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${version}.tgz";
     hash = "sha256-NbRDLyfMJmX4a+67mvajmxJRlwiDwwRL2L5PToxzHKA=";
   };
+
+  # Trial Bun 1.4.2 without updating the pinned nixpkgs input (which has 1.3.13).
+  bunVersion = "1.4.2";
+  bunAssets = {
+    aarch64-darwin = {
+      name = "bun-darwin-aarch64.zip";
+      hash = "sha256-kJh6OhbX21VtiGrD1VHnttPt8KHPQ6yu1iLoZ2vh0S8=";
+    };
+    x86_64-darwin = {
+      name = "bun-darwin-x64-baseline.zip";
+      hash = "sha256-utW71s8U0JgNEV9ZVMn/kE32GdXplNLaH/zNPzFjALA=";
+    };
+    aarch64-linux = {
+      name = "bun-linux-aarch64.zip";
+      hash = "sha256-VDKLvC2cjgyfiSxUTWbFeoO4QTnjSQnl7oF1jxrI/ac=";
+    };
+    x86_64-linux = {
+      name = "bun-linux-x64.zip";
+      hash = "sha256-NjaPrvdSeHXV/6UuU81IAhdB8qg+tiCKjdZAaNQiqRM=";
+    };
+  };
+  bunSources = lib.mapAttrs (
+    _: asset:
+    fetchurl {
+      url = "https://github.com/oven-sh/bun/releases/download/bun-v${bunVersion}/${asset.name}";
+      inherit (asset) hash;
+    }
+  ) bunAssets;
+  bun_1_4_2 = bun.overrideAttrs (_: {
+    version = bunVersion;
+    src = bunSources.${stdenv.hostPlatform.system};
+    passthru.sources = bunSources;
+  });
 in
 buildNpmPackage (finalAttrs: {
   pname = "pi-coding-agent";
@@ -43,7 +76,7 @@ buildNpmPackage (finalAttrs: {
 
   nodejs = nodejs_22;
 
-  nativeBuildInputs = [ bun ];
+  nativeBuildInputs = [ bun_1_4_2 ];
 
   # Matches upstream's `npm ci --ignore-scripts`; nothing pi needs is built by
   # install scripts, and some transitive dev deps try to compile native addons.

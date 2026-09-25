@@ -120,4 +120,9 @@ alternatives). `extensionOpts` remains as a backwards-compatible alias for
 `extensions`; explicit `bashAlts`, `extensions`, and legacy `extensionOpts`
 arguments are also available to consumers that do not use module definitions.
 
+When `fetch-webpage` is enabled, the Pi wrapper provides curl and the extension
+uses a short-lived curl subprocess for each tool invocation. It exits after
+downloading the response; timeout or cancellation terminates it, and temporary
+response files are removed.
+
 Changes to packaged agents, extensions, permissions, or the analyzer are included automatically in the next Nix build. The Pi dependency itself is pinned in `pkgs/pi/default.nix` and should be updated together with its source and dependency hashes.
