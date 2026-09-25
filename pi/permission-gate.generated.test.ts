@@ -28,6 +28,7 @@ const GATE_SOURCE_PATH = process.env.GATE_SOURCE_PATH;
 
 type ToolResult = undefined | { block: true; reason: string };
 type Handlers = {
+  before_agent_start?: (event: any, ctx: any) => Promise<any>;
   session_start?: (event: unknown, ctx: any) => Promise<unknown>;
   tool_call?: (event: unknown, ctx: any) => Promise<ToolResult>;
 };
@@ -37,13 +38,26 @@ let counter = 0;
 /** Load a fresh instance of the generated extension module. Each call gets
  * its own file (and therefore its own module-level state, e.g.
  * sessionPathGrants) so tests don't leak state into each other. */
-async function loadGate(): Promise<{ handlers: Handlers; entries: unknown[] }> {
+async function loadGate(
+  altInstructions?: string,
+): Promise<{ handlers: Handlers; entries: unknown[] }> {
   if (!GATE_SOURCE_PATH) throw new Error("GATE_SOURCE_PATH not set");
   const source = readFileSync(GATE_SOURCE_PATH, "utf8");
   const dir = mkdtempSync(join(tmpdir(), "permission-gate-"));
   const file = join(dir, `gate-${counter++}.mts`);
   writeFileSync(file, source);
-  const mod = await import(pathToFileURL(file).href);
+  const previousInstructions = process.env.PI_BASH_ALT_INSTRUCTIONS;
+  if (altInstructions === undefined)
+    delete process.env.PI_BASH_ALT_INSTRUCTIONS;
+  else process.env.PI_BASH_ALT_INSTRUCTIONS = altInstructions;
+  let mod: any;
+  try {
+    mod = await import(pathToFileURL(file).href);
+  } finally {
+    if (previousInstructions === undefined)
+      delete process.env.PI_BASH_ALT_INSTRUCTIONS;
+    else process.env.PI_BASH_ALT_INSTRUCTIONS = previousInstructions;
+  }
   const handlers: Handlers = {};
   const entries: unknown[] = [];
   const pi = {
@@ -60,6 +74,27 @@ async function loadGate(): Promise<{ handlers: Handlers; entries: unknown[] }> {
   await mod.default(pi);
   return { handlers, entries };
 }
+
+test("appends configured Bash ALT instructions to the system prompt", async () => {
+  const instructionsFile = join(
+    mkdtempSync(join(tmpdir(), "permission-gate-alt-prompt-")),
+    "instructions.md",
+  );
+  const instructions =
+    "\n\nBash command alternatives:\n- Do not use `grep`; use `rg`.\n";
+  writeFileSync(instructionsFile, instructions);
+  const { handlers } = await loadGate(instructionsFile);
+  const result = await handlers.before_agent_start!(
+    { systemPrompt: "Base instructions" },
+    {},
+  );
+  assert.equal(result.systemPrompt, `Base instructions${instructions}`);
+});
+
+test("does not register a prompt change when ALT instructions are absent", async () => {
+  const { handlers } = await loadGate();
+  assert.equal(handlers.before_agent_start, undefined);
+});
 
 function makeFixture() {
   // Canonicalize immediately: on macOS `tmpdir()` reports /var, but the gate
