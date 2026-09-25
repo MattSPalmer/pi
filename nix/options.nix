@@ -15,56 +15,35 @@ let
       };
     }
   );
-  extensionDefaults = {
-    permission-gate = {
-      enable = true;
-      dependsOn = [ ];
+  extensionDefaults =
+    let
+      default = {
+        enable = false;
+        dependsOn = [ ];
+      };
+    in
+    {
+      permission-gate = default;
+      propose-permission = {
+        enable = true;
+        dependsOn = [ "permission-gate" ];
+      };
+      response-pipe = {
+        enable = false;
+        dependsOn = [ "permission-gate" ];
+      };
+
+      elements = default;
+      subagent.enable = true;
+      committing-mode = default;
+      cost-status.enable = true;
+      export-response.enable = true;
+      sesseract = default;
+      mac-system-theme = default;
+      kagi-search = default;
+      fetch-webpage = default;
+
     };
-    propose-permission = {
-      enable = true;
-      dependsOn = [ "permission-gate" ];
-    };
-    elements = {
-      enable = true;
-      dependsOn = [ ];
-    };
-    subagent = {
-      enable = true;
-      dependsOn = [ ];
-    };
-    committing-mode = {
-      enable = true;
-      dependsOn = [ ];
-    };
-    cost-status = {
-      enable = true;
-      dependsOn = [ ];
-    };
-    export-response = {
-      enable = true;
-      dependsOn = [ ];
-    };
-    sesseract = {
-      enable = true;
-      dependsOn = [ ];
-    };
-    mac-system-theme = {
-      enable = true;
-      dependsOn = [ ];
-    };
-    kagi-search = {
-      enable = false;
-      dependsOn = [ ];
-    };
-    fetch-webpage = {
-      enable = true;
-      dependsOn = [ ];
-    };
-    response-pipe = {
-      enable = false;
-      dependsOn = [ "permission-gate" ];
-    };
-  };
   extensionOption = defaults: {
     enable = lib.mkOption {
       type = lib.types.bool;
