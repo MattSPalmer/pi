@@ -60,6 +60,8 @@ let
     # judge only the chunk text handed to them, so any variance across them
     # reflects the lens, not extra context one happened to fetch.
     tools = [ ];
+    # Inject the bounded review payload automatically; lenses remain tool-less.
+    contextFile = "/tmp/pr-chunks-normalized.json";
     declaude = false;
   };
 
@@ -233,6 +235,7 @@ let
     {
       inherit name declaude;
       inherit (raw) description;
+      contextFile = raw.contextFile or null;
       mode = raw.mode or "subagent";
       model = raw.model or null;
       tools = raw.tools or null;
@@ -263,7 +266,12 @@ let
     name = "${agent.name}.md";
     value =
       frontmatter {
-        inherit (agent) name description model;
+        inherit (agent)
+          name
+          description
+          model
+          contextFile
+          ;
         # The subagent extension is patched to read `none` as --no-tools.
         tools =
           if agent.tools == null then
