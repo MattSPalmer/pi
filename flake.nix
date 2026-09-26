@@ -144,6 +144,30 @@
             test -e ${piWithRequiredExtension}/agent/extensions/propose-permission/index.ts
             touch "$out"
           '';
+          subagentContext = pkgs.runCommand "pi-subagent-context-test" { } ''
+            set -eu
+            extension=${result.packages.pi}/agent/extensions/subagent
+            test -e "$extension/index.ts"
+            test -e "$extension/agents.ts"
+
+            # Metadata parsing and automatic context injection must be present
+            # in the patched extension, not merely in the source patch.
+            grep -q 'contextFile?: string' "$extension/agents.ts"
+            grep -q 'frontmatter.contextFile' "$extension/agents.ts"
+            grep -q 'fs.readFileSync(agent.contextFile' "$extension/index.ts"
+            grep -q 'Injected context from' "$extension/index.ts"
+            grep -q 'Could not read context file' "$extension/index.ts"
+
+            # Generated review lenses must opt into injection while remaining
+            # explicitly tool-less; unrelated agents must not inherit it.
+            for lens in api empathy idiom perf security; do
+              file=${result.packages.pi}/agent/agents/review-lens-$lens.md
+              grep -q 'contextFile: "/tmp/pr-chunks-normalized.json"' "$file"
+              grep -q 'tools: "none"' "$file"
+            done
+            ! grep -R -q 'contextFile:' ${result.packages.pi}/agent/agents/context-preflight.md
+            touch "$out"
+          '';
         };
 
         devShells.default = pkgs.mkShell {
