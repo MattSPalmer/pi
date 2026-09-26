@@ -154,9 +154,12 @@
             # in the patched extension, not merely in the source patch.
             grep -q 'contextFile?: string' "$extension/agents.ts"
             grep -q 'frontmatter.contextFile' "$extension/agents.ts"
-            grep -q 'fs.readFileSync(agent.contextFile' "$extension/index.ts"
-            grep -q 'Injected context from' "$extension/index.ts"
-            grep -q 'Could not read context file' "$extension/index.ts"
+            grep -q 'injectContext(task, agent.contextFile)' "$extension/index.ts"
+            grep -q 'Injected context from' "$extension/subagent-context.mjs"
+            grep -q 'Could not read context file' "$extension/subagent-context.mjs"
+            cp ${./pi/subagent-context.test.mjs} ./subagent-context.test.mjs
+            cp ${./pi/subagent-context.mjs} ./subagent-context.mjs
+            ${pkgs.nodejs}/bin/node ./subagent-context.test.mjs
 
             # Generated review lenses must opt into injection while remaining
             # explicitly tool-less; unrelated agents must not inherit it.

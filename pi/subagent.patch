@@ -6,25 +6,19 @@
 +	contextFile?: unknown;
 @@ -103,0 +106,1 @@
 +			contextFile: typeof frontmatter.contextFile === "string" ? frontmatter.contextFile : undefined,
-+
 --- a/index.ts
 +++ b/index.ts
+@@ -15,0 +16,1 @@
++import { injectContext } from "./subagent-context.mjs";
 @@ -307 +307,2 @@
 -	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 +	if (agent.tools && agent.tools.length === 1 && agent.tools[0] === "none") args.push("--no-tools");
 +	else if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
-@@ -341,0 +343,8 @@
+@@ -341,0 +343,7 @@
 +	if (agent.contextFile) {
 +		try {
-+			const context = fs.readFileSync(agent.contextFile, "utf-8");
-+			task = `${task}\n\nInjected context from ${agent.contextFile}:\n${context}`;
++			task = injectContext(task, agent.contextFile);
 +		} catch (error) {
-+			return { ...currentResult, exitCode: 1, stderr: `Could not read context file ${agent.contextFile}: ${String(error)}` };
++			return { ...currentResult, exitCode: 1, stderr: String(error) };
 +		}
 +	}
-@@ -347,0 +349,5 @@
-+				env: {
-+					...process.env,
-+					PATH: `${process.env.HOME}/.pi/agent/bin:${process.env.PATH ?? ""}`,
-+					PI_SUBAGENT_NAME: agent.name,
-+				},

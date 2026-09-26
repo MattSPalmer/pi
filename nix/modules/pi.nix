@@ -143,6 +143,7 @@ let
   subagentExtension = pkgs.runCommand "pi-subagent-extension" { } ''
     mkdir -p $out
     cp ${upstreamPi}/bin/examples/extensions/subagent/{index.ts,agents.ts} $out/
+    cp ${../../pi/subagent-context.mjs} $out/subagent-context.mjs
     chmod +w $out/index.ts $out/agents.ts
     patch -p1 -d $out < ${../../pi/subagent.patch}
     substituteInPlace $out/agents.ts \
