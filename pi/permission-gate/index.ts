@@ -138,6 +138,7 @@ const choosePath = async (
     const picked = await ctx.ui.select(
       `Choose access scope for:\n\n  ${value}`,
       ["Requested path only — /"],
+      { signal: ctx.signal },
     );
     return picked === "Requested path only — /" ? "/" : undefined;
   }
@@ -172,6 +173,7 @@ const choosePath = async (
   const picked = await ctx.ui.select(
     `Choose access scope for:\n\n  ${value}`,
     labels,
+    { signal: ctx.signal },
   );
   if (picked === undefined) return undefined;
   const index = labels.indexOf(picked);
@@ -223,11 +225,11 @@ const checkPath = async (
       reason: "Requested value cannot be granted as a filesystem path",
     };
   }
-  const choice = await ctx.ui.select(`Allow access to folder?\n\n  ${folder}`, [
-    "Once",
-    "For this session",
-    "No",
-  ]);
+  const choice = await ctx.ui.select(
+    `Allow access to folder?\n\n  ${folder}`,
+    ["Once", "For this session", "No"],
+    { signal: ctx.signal },
+  );
   markPrompt(
     ctx,
     `path approval (${folder})`,
@@ -270,14 +272,32 @@ export default function (pi: ExtensionAPI) {
     sessionPathGrants.add(canonicalPath(startupPath) ?? startupPath);
   });
   const pathTools = ["read", "edit", "write", "ls", "grep", "find"];
+  let pendingPermissionCheck = Promise.resolve();
   pi.on("tool_call", async (event, ctx) => {
-    const shouldAudit =
-      pathTools.includes(event.toolName) || event.toolName === "bash";
+    // Only gated tools join the queue. Orchestrators such as codemode
+    // should not wait on unrelated permission prompts.
+    if (!pathTools.includes(event.toolName) && event.toolName !== "bash")
+      return undefined;
+
+    // Nested and direct calls can arrive concurrently, but selectors share
+    // one UI slot. Serialize the whole check (including both path dialogs)
+    // so queued calls also see any session grants approved ahead of them.
+    // Release after the hook, not tool_result: tool execution stays parallel.
+    const signal = ctx.signal;
+    const previous = pendingPermissionCheck;
+    let release!: () => void;
+    pendingPermissionCheck = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+
     const state: AuditState = { prompted: false, promptCount: 0 };
-    if (shouldAudit) auditStates.set(ctx, state);
+    auditStates.set(ctx, state);
     let result: any;
     try {
       result = await (async () => {
+        if (signal?.aborted)
+          return { block: true, reason: "Permission check cancelled" };
         // A primary agent's proposal tool appends the entry during the
         // same turn. Refresh here so approval takes effect immediately.
         restoreSessionGrants(ctx);
@@ -365,35 +385,36 @@ export default function (pi: ExtensionAPI) {
         return undefined;
       })();
     } finally {
-      if (shouldAudit) {
-        const request =
-          event.toolName === "bash"
-            ? String(event.input.command ?? "").trim()
-            : String(
-                event.input.path ??
-                  event.input.root ??
-                  event.input.directory ??
-                  "",
-              );
-        recordPermissionRequest(ctx, {
-          audit_version: 1,
-          event: "permission_evaluation",
-          tool: event.toolName,
-          kind: event.toolName === "bash" ? "bash" : "path",
-          request,
-          potentially_promptable: true,
-          prompted: state.prompted,
-          prompt_count: state.promptCount,
-          disposition: result?.block ? "deny" : "allow",
-          decision: state.decision,
-          rule: state.rule,
-          reason: state.reason,
-          statements: state.statements,
-          scope: state.scope,
-          duration: state.duration,
-        });
-        auditStates.delete(ctx);
-      }
+      // Always unblock the next check, including when evaluation/UI throws.
+      // Its continuation runs after this synchronous audit completes.
+      release();
+      const request =
+        event.toolName === "bash"
+          ? String(event.input.command ?? "").trim()
+          : String(
+              event.input.path ??
+                event.input.root ??
+                event.input.directory ??
+                "",
+            );
+      recordPermissionRequest(ctx, {
+        audit_version: 1,
+        event: "permission_evaluation",
+        tool: event.toolName,
+        kind: event.toolName === "bash" ? "bash" : "path",
+        request,
+        potentially_promptable: true,
+        prompted: state.prompted,
+        prompt_count: state.promptCount,
+        disposition: result?.block ? "deny" : "allow",
+        decision: state.decision,
+        rule: state.rule,
+        reason: state.reason,
+        statements: state.statements,
+        scope: state.scope,
+        duration: state.duration,
+      });
+      auditStates.delete(ctx);
     }
     return result;
   });

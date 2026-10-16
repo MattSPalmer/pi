@@ -105,6 +105,8 @@ Paths are canonicalized before matching. Existing path components are resolved, 
 
 Unknown or ambiguous paths require an interactive choice of scope, followed by a choice between one-use access, session access, or denial. If no user interface is available, approval-required operations are blocked rather than silently allowed.
 
+Direct calls and calls nested inside codemode use the same permission checks. Concurrent checks are queued so approval dialogs do not replace each other, and waiting checks see session grants approved ahead of them. The queue covers permission evaluation, not tool execution.
+
 Shell commands are analyzed with a tree-sitter-based parser. Opaque interpreters such as `bash`, `node`, `python`, `ruby`, `sh`, and `zsh` require approval. Shell control syntax, unsafe expansion, and malformed analysis also require approval. Explicit filesystem arguments and redirect targets are checked separately, so a command-level allow does not automatically authorize access to a sensitive path.
 
 Denied rules win over ordinary matches. Session grants can reduce repeated prompts, but they do not bypass command parsing or explicit deny rules. Delegated agents do not have an approval UI, so an approval-required action is denied for them.

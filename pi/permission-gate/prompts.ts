@@ -47,6 +47,7 @@ export const askBash = async (
   const choice = await ctx.ui.select(
     `Permission rule ${label} requires approval:\n\n${display}\n\nAllow?`,
     ["Yes", "No"],
+    { signal: ctx.signal },
   );
   markPrompt(ctx, label, choice === "Yes" ? "allowed" : "denied", undefined, {
     statements: parts.length > 1 ? parts : undefined,

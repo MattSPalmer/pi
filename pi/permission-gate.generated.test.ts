@@ -27,6 +27,11 @@ import test from "node:test";
 const GATE_SOURCE_PATH = process.env.GATE_SOURCE_PATH;
 
 type ToolResult = undefined | { block: true; reason: string };
+type Select = (
+  prompt: string,
+  options: string[],
+  opts?: { signal?: AbortSignal },
+) => Promise<string | undefined>;
 type Handlers = {
   before_agent_start?: (event: any, ctx: any) => Promise<any>;
   session_start?: (event: unknown, ctx: any) => Promise<unknown>;
@@ -118,13 +123,15 @@ function makeCtx(
   cwd: string,
   opts: {
     hasUI?: boolean;
-    select?: (prompt: string, options: string[]) => Promise<string | undefined>;
+    select?: Select;
     entries?: unknown[];
+    signal?: AbortSignal;
   } = {},
 ) {
   return {
     cwd,
     hasUI: opts.hasUI ?? true,
+    signal: opts.signal,
     ui: {
       select:
         opts.select ??
@@ -153,6 +160,54 @@ function fakeUi(
   };
   return { select, prompts };
 }
+
+/** Hold the first dialog open, as a real UI does while waiting for input.
+ * Unlike fakeUi's immediate answers, this exposes overlapping selectors. */
+function pausedUi(
+  choose: (
+    prompt: string,
+    options: string[],
+    index: number,
+  ) => string | undefined,
+) {
+  let resume!: () => void;
+  const paused = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  const prompts: string[] = [];
+  let active = 0;
+  let maxConcurrent = 0;
+  const select: Select = async (prompt, options, opts) => {
+    const index = prompts.length;
+    prompts.push(prompt);
+    maxConcurrent = Math.max(maxConcurrent, ++active);
+    let onAbort: (() => void) | undefined;
+    try {
+      if (index === 0) {
+        await new Promise<void>((resolve) => {
+          onAbort = resolve;
+          opts?.signal?.addEventListener("abort", onAbort, { once: true });
+          if (opts?.signal?.aborted) resolve();
+          paused.then(resolve);
+        });
+      }
+      return opts?.signal?.aborted ? undefined : choose(prompt, options, index);
+    } finally {
+      if (onAbort) opts?.signal?.removeEventListener("abort", onAbort);
+      active--;
+    }
+  };
+  return {
+    select,
+    prompts,
+    resume,
+    get maxConcurrent() {
+      return maxConcurrent;
+    },
+  };
+}
+
+const nextTick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 if (GATE_SOURCE_PATH) {
   test("generated gate: GATE_SOURCE_PATH available", () => {
@@ -189,6 +244,234 @@ if (GATE_SOURCE_PATH) {
       if (previousLog === undefined) delete process.env.PI_PERMISSION_LOG;
       else process.env.PI_PERMISSION_LOG = previousLog;
     }
+  });
+
+  test("generated gate: parallel codemode calls get separate, non-overlapping Bash approvals", async () => {
+    const { handlers } = await loadGate();
+    await handlers.session_start!({}, makeCtx("/work/project"));
+    const choices = ["Yes", "No", undefined];
+    const ui = pausedUi((_prompt, _options, index) => choices[index]);
+    const commands = ["python3 -c 'print(1)'", "node -e '2'", "ruby -e '3'"];
+    const calls = Promise.all(
+      commands.map((command, index) =>
+        handlers.tool_call!(
+          {
+            toolName: "bash",
+            toolCallId: `codemode/1/${index}`,
+            parentToolCallId: "codemode/1",
+            input: { command },
+          },
+          makeCtx("/work/project", { select: ui.select }),
+        ),
+      ),
+    );
+    await nextTick();
+    const promptsWhileWaiting = ui.prompts.length;
+    ui.resume();
+    const results = await calls;
+    assert.equal(
+      promptsWhileWaiting,
+      1,
+      "only the first approval should be visible",
+    );
+    assert.equal(ui.maxConcurrent, 1, "selectors must not replace each other");
+    assert.equal(ui.prompts.length, commands.length);
+    commands.forEach((command, index) =>
+      assert.ok(ui.prompts[index].includes(command)),
+    );
+    assert.deepEqual(results, [
+      undefined,
+      { block: true, reason: "Blocked by user" },
+      { block: true, reason: "Blocked by user" },
+    ]);
+  });
+
+  test("generated gate: parallel path calls keep scope and duration prompts together", async () => {
+    const { handlers } = await loadGate();
+    const root = makeFixture();
+    await handlers.session_start!({}, makeCtx("/work/project"));
+    const ui = pausedUi((prompt, options) =>
+      prompt.startsWith("Choose access scope") ? options[0] : "Once",
+    );
+    const paths = [join(root, "a", "file.txt"), join(root, "a", "other.txt")];
+    const calls = Promise.all(
+      paths.map((path) =>
+        handlers.tool_call!(
+          { toolName: "read", parentToolCallId: "codemode/1", input: { path } },
+          makeCtx("/work/project", { select: ui.select }),
+        ),
+      ),
+    );
+    await nextTick();
+    ui.resume();
+    assert.deepEqual(await calls, [undefined, undefined]);
+    assert.equal(ui.maxConcurrent, 1);
+    assert.equal(ui.prompts.length, 4);
+    paths.forEach((path, index) => {
+      assert.ok(ui.prompts[index * 2].includes(path));
+      assert.match(ui.prompts[index * 2], /^Choose access scope/);
+      assert.match(ui.prompts[index * 2 + 1], /^Allow access to folder/);
+    });
+  });
+
+  test("generated gate: queued path calls recheck a session grant instead of prompting again", async () => {
+    const { handlers, entries } = await loadGate();
+    const root = makeFixture();
+    await handlers.session_start!({}, makeCtx("/work/project"));
+    const ui = pausedUi((prompt, options) =>
+      prompt.startsWith("Choose access scope")
+        ? options[0]
+        : "For this session",
+    );
+    const calls = Promise.all([
+      handlers.tool_call!(
+        { toolName: "read", input: { path: join(root, "a", "file.txt") } },
+        makeCtx("/work/project", { select: ui.select }),
+      ),
+      handlers.tool_call!(
+        { toolName: "write", input: { path: join(root, "a", "other.txt") } },
+        makeCtx("/work/project", { select: ui.select }),
+      ),
+    ]);
+    await nextTick();
+    ui.resume();
+    assert.deepEqual(await calls, [undefined, undefined]);
+    assert.equal(ui.maxConcurrent, 1);
+    assert.equal(ui.prompts.length, 2);
+    assert.equal(entries.length, 1);
+  });
+
+  test("generated gate: path and Bash approvals share the same queue", async () => {
+    const { handlers } = await loadGate();
+    const root = makeFixture();
+    await handlers.session_start!({}, makeCtx("/work/project"));
+    const ui = pausedUi((prompt, options) => {
+      if (prompt.startsWith("Choose access scope")) return options[0];
+      return prompt.startsWith("Allow access to folder") ? "Once" : "Yes";
+    });
+    const calls = Promise.all([
+      handlers.tool_call!(
+        { toolName: "read", input: { path: join(root, "secret") } },
+        makeCtx("/work/project", { select: ui.select }),
+      ),
+      handlers.tool_call!(
+        { toolName: "bash", input: { command: "python3 -c 'print(1)'" } },
+        makeCtx("/work/project", { select: ui.select }),
+      ),
+    ]);
+    await nextTick();
+    ui.resume();
+    assert.deepEqual(await calls, [undefined, undefined]);
+    assert.equal(ui.maxConcurrent, 1);
+    assert.equal(ui.prompts.length, 3);
+    assert.match(ui.prompts[1], /^Allow access to folder/);
+    assert.match(ui.prompts[2], /opaque interpreter/);
+  });
+
+  test("generated gate: a failed selector does not poison the approval queue", async () => {
+    const { handlers } = await loadGate();
+    await handlers.session_start!({}, makeCtx("/work/project"));
+    const error = new Error("selector failed");
+    const ui = pausedUi((_prompt, _options, index) => {
+      if (index === 0) throw error;
+      return "Yes";
+    });
+    const calls = Promise.allSettled(
+      [1, 2].map(() =>
+        handlers.tool_call!(
+          { toolName: "bash", input: { command: "python3 -c 'print(1)'" } },
+          makeCtx("/work/project", { select: ui.select }),
+        ),
+      ),
+    );
+    await nextTick();
+    ui.resume();
+    assert.deepEqual(await calls, [
+      { status: "rejected", reason: error },
+      { status: "fulfilled", value: undefined },
+    ]);
+    assert.equal(ui.maxConcurrent, 1);
+  });
+
+  test("generated gate: abort dismisses the active approval and skips cancelled queued checks", async () => {
+    const { handlers, entries } = await loadGate();
+    const root = makeFixture();
+    await handlers.session_start!({}, makeCtx("/work/project"));
+    const controller = new AbortController();
+    const ui = pausedUi((_prompt, options) => options[0]);
+    const calls = Promise.all([
+      handlers.tool_call!(
+        { toolName: "bash", input: { command: "python3 -c 'print(1)'" } },
+        makeCtx("/work/project", {
+          select: ui.select,
+          signal: controller.signal,
+        }),
+      ),
+      handlers.tool_call!(
+        { toolName: "read", input: { path: join(root, "secret") } },
+        makeCtx("/work/project", {
+          select: ui.select,
+          signal: controller.signal,
+        }),
+      ),
+    ]);
+    await nextTick();
+    controller.abort();
+    await nextTick();
+    let nextCompleted = false;
+    const next = handlers.tool_call!(
+      { toolName: "bash", input: { command: "node -e '2'" } },
+      makeCtx("/work/project", { select: ui.select }),
+    ).then((result) => {
+      nextCompleted = true;
+      return result;
+    });
+    await nextTick();
+    const completedBeforeResume = nextCompleted;
+    // Release even on regression so a missing signal cannot hang the test.
+    ui.resume();
+    const results = await calls;
+    assert.equal(await next, undefined);
+    assert.ok(results.every((result) => result?.block));
+    assert.equal(
+      completedBeforeResume,
+      true,
+      "abort must release the active dialog",
+    );
+    assert.equal(ui.maxConcurrent, 1);
+    assert.equal(
+      ui.prompts.length,
+      2,
+      "cancelled queued calls must not open a dialog",
+    );
+    assert.equal(entries.length, 0);
+  });
+
+  test("generated gate: a pending approval does not queue codemode itself", async () => {
+    const { handlers } = await loadGate();
+    await handlers.session_start!({}, makeCtx("/work/project"));
+    const ui = pausedUi(() => "Yes");
+    const pending = handlers.tool_call!(
+      { toolName: "bash", input: { command: "python3 -c 'print(1)'" } },
+      makeCtx("/work/project", { select: ui.select }),
+    );
+    await nextTick();
+    let passed = false;
+    const outer = handlers.tool_call!(
+      { toolName: "codemode", input: { code: "return 1" } },
+      makeCtx("/work/project"),
+    ).then((result) => {
+      passed = true;
+      return result;
+    });
+    await nextTick();
+    const passedWhileWaiting = passed;
+    ui.resume();
+    assert.deepEqual(await Promise.all([pending, outer]), [
+      undefined,
+      undefined,
+    ]);
+    assert.equal(passedWhileWaiting, true);
   });
 
   test("generated gate: root cwd trusts descendants (regression: isWithin('/', '/') bug)", async () => {
