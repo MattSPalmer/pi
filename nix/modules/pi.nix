@@ -140,15 +140,21 @@ let
   # so `tools: none` disables tools, subagents are identifiable at runtime, and
   # agent definitions are read from the packaged configuration rather than from
   # the writable user directory.
-  subagentExtension = pkgs.runCommand "pi-subagent-extension" { } ''
+  subagentExtension = pkgs.runCommand "pi-subagent-extension" { nativeBuildInputs = [ pkgs.bun ]; } ''
     mkdir -p $out
     cp ${upstreamPi}/bin/examples/extensions/subagent/{index.ts,agents.ts} $out/
     cp ${../../pi/subagent-context.mjs} $out/subagent-context.mjs
     chmod +w $out/index.ts $out/agents.ts
-    patch -p1 -d $out < ${../../pi/subagent.patch}
+    patch --fuzz=0 -p1 -d $out < ${../../pi/subagent.patch}
     substituteInPlace $out/agents.ts \
       --replace-fail 'const userDir = path.join(getAgentDir(), "agents");' \
       'const userDir = process.env.PI_CONFIG_DIR ? path.join(process.env.PI_CONFIG_DIR, "agents") : path.join(getAgentDir(), "agents");'
+
+    # Parse the patched module graph, including agents.ts. A successful patch
+    # or a text-presence check alone does not guarantee loadable TypeScript.
+    bun build "$out/index.ts" --bundle --format=esm --target=bun \
+      --external='@earendil-works/*' --external=typebox \
+      --outfile "$TMPDIR/subagent-validation.js"
   '';
   piWrapper = pkgs.writeShellApplication {
     name = "pi";

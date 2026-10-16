@@ -144,33 +144,37 @@
             test -e ${piWithRequiredExtension}/agent/extensions/propose-permission/index.ts
             touch "$out"
           '';
-          subagentContext = pkgs.runCommand "pi-subagent-context-test" { } ''
-            set -eu
-            extension=${result.packages.pi}/agent/extensions/subagent
-            test -e "$extension/index.ts"
-            test -e "$extension/agents.ts"
+          subagentContext =
+            pkgs.runCommand "pi-subagent-context-test"
+              {
+                nativeBuildInputs = [
+                  pkgs.bun
+                  pkgs.ripgrep
+                ];
+              }
+              ''
+                set -eu
+                extension=${result.packages.pi}/agent/extensions/subagent
+                test -e "$extension/index.ts"
+                test -e "$extension/agents.ts"
 
-            # Metadata parsing and automatic context injection must be present
-            # in the patched extension, not merely in the source patch.
-            grep -q 'contextFile?: string' "$extension/agents.ts"
-            grep -q 'frontmatter.contextFile' "$extension/agents.ts"
-            grep -q 'injectContext(task, agent.contextFile)' "$extension/index.ts"
-            grep -q 'Injected context from' "$extension/subagent-context.mjs"
-            grep -q 'Could not read context file' "$extension/subagent-context.mjs"
-            cp ${./pi/subagent-context.test.mjs} ./subagent-context.test.mjs
-            cp ${./pi/subagent-context.mjs} ./subagent-context.mjs
-            ${pkgs.nodejs}/bin/node ./subagent-context.test.mjs
+                # Exercise discovery and dispatch in the generated extension. Text
+                # matches alone miss misplaced patch hunks and late injection.
+                SUBAGENT_SOURCE_PATH="$extension" bun test ${./pi/subagent.generated.test.ts}
+                cp ${./pi/subagent-context.test.mjs} ./subagent-context.test.mjs
+                cp ${./pi/subagent-context.mjs} ./subagent-context.mjs
+                ${pkgs.nodejs}/bin/node ./subagent-context.test.mjs
 
-            # Generated review lenses must opt into injection while remaining
-            # explicitly tool-less; unrelated agents must not inherit it.
-            for lens in api empathy idiom perf security; do
-              file=${result.packages.pi}/agent/agents/review-lens-$lens.md
-              grep -q 'contextFile: "/tmp/pr-chunks-normalized.json"' "$file"
-              grep -q 'tools: "none"' "$file"
-            done
-            ! grep -R -q 'contextFile:' ${result.packages.pi}/agent/agents/context-preflight.md
-            touch "$out"
-          '';
+                # Generated review lenses must opt into injection while remaining
+                # explicitly tool-less; unrelated agents must not inherit it.
+                for lens in api empathy idiom perf security; do
+                  file=${result.packages.pi}/agent/agents/review-lens-$lens.md
+                  rg -Fq 'contextFile: "/tmp/pr-chunks-normalized.json"' "$file"
+                  rg -Fq 'tools: "none"' "$file"
+                done
+                ! rg -Fq 'contextFile:' ${result.packages.pi}/agent/agents/context-preflight.md
+                touch "$out"
+              '';
         };
 
         devShells.default = pkgs.mkShell {
